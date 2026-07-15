@@ -1,7 +1,7 @@
 // api.js — Belli Laadkaart API client
 // Communiceert met de Express/PostgreSQL backend op Railway
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+const API_URL = process.env.REACT_APP_API_URL || 'https://belli-laadplan-backend-production.up.railway.app';
 
 async function apiFetch(path, options = {}) {
   const resp = await fetch(`${API_URL}${path}`, {
