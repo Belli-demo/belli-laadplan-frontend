@@ -127,7 +127,7 @@ export default function GemeenteOnboarding({ onComplete, onClose }) {
       } else {
         // Fallback: maak 4 standaard wijken
         const kwarten = ['Noord','Zuid','Oost','West'];
-        const offsets = [[0.01,0],[-0.01,0],[0,0.01],[0,−0.01]];
+        const offsets = [[0.01,0],[-0.01,0],[0,0.01],[0,-0.01]];
         setWijken(kwarten.map((naam, i) => ({
           id:          `NK0${i+1}`,
           naam,
