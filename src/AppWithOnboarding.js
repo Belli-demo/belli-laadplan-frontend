@@ -17,7 +17,7 @@ const C = {
   darkBg:'#0d1c22', panelBg:'#122028', border:'#1e3a46',
   teal:'#9EC5CB', tealDark:'#2B5F6E', green:'#B7D2AE',
   darkGreen:'#3A6B4A', gold:'#D0AC41', warn:'#E8683A',
-  text:'text:'#ffffff', textMid:'#b0d4db', textDim:'#7aacb4',
+  text:'#ffffff', textMid:'#b0d4db', textDim:'#7aacb4',
   red:'#E8683A',
 };
 
