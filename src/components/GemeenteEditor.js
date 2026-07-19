@@ -7,47 +7,54 @@ const C = {
   warn:'#E8683A', text:'#ffffff', textMid:'#b0d4db', textDim:'#7aacb4',
 };
 
-const WIJKTYPE_PRESETS = {
-  centrum:      { label:'Centrum',           seg:{ bew:0.38, bez:0.42, log:0.12, ov:0.08 } },
-  residentieel: { label:'Residentieel',       seg:{ bew:0.68, bez:0.18, log:0.10, ov:0.04 } },
-  gemengd:      { label:'Gemengd',            seg:{ bew:0.52, bez:0.28, log:0.14, ov:0.06 } },
-  industrieel:  { label:'Industrie',          seg:{ bew:0.22, bez:0.18, log:0.52, ov:0.08 } },
-  studentenwijk:{ label:'Studentenwijk',      seg:{ bew:0.45, bez:0.35, log:0.12, ov:0.08 } },
-  landelijk:    { label:'Landelijk',          seg:{ bew:0.72, bez:0.15, log:0.10, ov:0.03 } },
-};
+// Zelfde drie wijktypes als het gevalideerde rekenmodel (zie Leeswijzer §5).
+// Een wijk kan er meerdere aanvinken (bijvoorbeeld woonwijk + bedrijventerrein
+// voor een hybride wijk); calcWijk middelt dan de bijbehorende doelgroepenmix.
+const WIJKTYPES = [
+  { key:'binnenstad',       label:'Binnenstad' },
+  { key:'woonwijk',         label:'Woonwijk' },
+  { key:'bedrijventerrein', label:'Bedrijventerrein' },
+];
 
 export default function GemeenteEditor({ gemeente, onSave, onClose }) {
-  const [naam,      setNaam]      = useState(gemeente.naam);
-  const [inwoners,  setInwoners]  = useState(gemeente.inwoners);
-  const [voertuigen,setVoertuigen]= useState(gemeente.voertuigen);
-  const [wijken,    setWijken]    = useState(
-    (gemeente.wijken || []).map(w => ({ ...w, seg: { ...w.seg } }))
+  const [naam,       setNaam]       = useState(gemeente.naam);
+  const [inwoners,   setInwoners]   = useState(gemeente.inwoners);
+  const [voertuigen, setVoertuigen] = useState(gemeente.voertuigen);
+  const [welvaartsindex, setWelvaartsindex] = useState(gemeente.welvaartsindex ?? 106.9);
+  const [privePctBerekend, setPrivePctBerekend] = useState(Math.round((gemeente.privePctBerekend ?? 0.5) * 100));
+  const [evOverride2030, setEvOverride2030] = useState(gemeente.evAandeelOverride?.[2030] != null ? Math.round(gemeente.evAandeelOverride[2030]*1000)/10 : '');
+  const [evOverride2035, setEvOverride2035] = useState(gemeente.evAandeelOverride?.[2035] != null ? Math.round(gemeente.evAandeelOverride[2035]*1000)/10 : '');
+  const [wijken,     setWijken]     = useState(
+    (gemeente.wijken || []).map(w => ({ ...w, wijktype: w.wijktype || ['woonwijk'], ovAandeel: w.ovAandeel ?? 0 }))
   );
-  const [saving,    setSaving]    = useState(false);
-  const [error,     setError]     = useState('');
-  const [activeTab, setActiveTab] = useState('gemeente');
+  const [saving,     setSaving]     = useState(false);
+  const [error,      setError]      = useState('');
+  const [activeTab,  setActiveTab]  = useState('gemeente');
 
   const updateWijk = (idx, field, val) =>
     setWijken(ws => ws.map((w, i) => i === idx ? { ...w, [field]: val } : w));
 
-  const updateSeg = (idx, sid, val) =>
-    setWijken(ws => ws.map((w, i) => i === idx
-      ? { ...w, seg: { ...w.seg, [sid]: parseFloat(val) / 100 } }
-      : w));
-
-  const applyPreset = (idx, type) => {
-    const preset = WIJKTYPE_PRESETS[type];
-    setWijken(ws => ws.map((w, i) => i === idx
-      ? { ...w, wijktype: type, seg: { ...preset.seg } }
-      : w));
-  };
+  const toggleWijktype = (idx, key) =>
+    setWijken(ws => ws.map((w, i) => {
+      if (i !== idx) return w;
+      const heeft = w.wijktype.includes(key);
+      const nieuw = heeft ? w.wijktype.filter(t => t !== key) : [...w.wijktype, key];
+      return { ...w, wijktype: nieuw.length ? nieuw : ['woonwijk'] }; // nooit helemaal leeg
+    }));
 
   const slaOp = async () => {
     setSaving(true); setError('');
     try {
+      const evAandeelOverride = {};
+      if (evOverride2030 !== '' && evOverride2030 != null) evAandeelOverride[2030] = parseFloat(evOverride2030) / 100;
+      if (evOverride2035 !== '' && evOverride2035 != null) evAandeelOverride[2035] = parseFloat(evOverride2035) / 100;
+
       const bijgewerkt = {
         ...gemeente,
         naam, inwoners: parseInt(inwoners), voertuigen: parseInt(voertuigen),
+        welvaartsindex: parseFloat(welvaartsindex),
+        privePctBerekend: parseFloat(privePctBerekend) / 100,
+        evAandeelOverride: Object.keys(evAandeelOverride).length ? evAandeelOverride : undefined,
         wijken,
       };
       await updateGemeente(gemeente.id, bijgewerkt);
@@ -75,25 +82,14 @@ export default function GemeenteEditor({ gemeente, onSave, onClose }) {
     grid2:    { display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 },
     wijkCard: { background:'#0a1620', border:`1px solid ${C.border}`, borderRadius:8, padding:'12px 14px', marginBottom:10 },
     wijkName: { fontSize:12, fontWeight:800, color:C.text, marginBottom:10 },
-    grid3:    { display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:10 },
+    grid3:    { display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:10 },
     smallInp: { width:'100%', background:'#122028', border:`1px solid ${C.border}`, borderRadius:5, padding:'5px 8px', color:C.text, fontSize:12 },
-    presets:  { display:'flex', flexWrap:'wrap', gap:4, marginBottom:8 },
-    preset:   (a) => ({ padding:'3px 8px', borderRadius:4, fontSize:10, fontWeight:700, cursor:'pointer', border:`1px solid ${a ? C.tealDark : C.border}`, background: a ? C.tealDark+'44' : 'transparent', color: a ? C.teal : C.textDim }),
-    segGrid:  { display:'grid', gridTemplateColumns:'1fr 1fr', gap:6 },
-    segRow:   { display:'flex', alignItems:'center', justifyContent:'space-between', fontSize:11 },
-    segLabel: { color:C.textMid },
-    segInp:   { width:56, background:'#0f1e24', border:`1px solid ${C.border}`, borderRadius:4, padding:'3px 6px', color:C.text, fontSize:12, textAlign:'right' },
-    segSum:   (ok) => ({ fontSize:10, fontWeight:700, color: ok ? C.darkGreen : C.warn, marginTop:6 }),
+    typeVak:  (a) => ({ padding:'5px 10px', borderRadius:5, fontSize:11, fontWeight:700, cursor:'pointer', border:`1px solid ${a ? C.tealDark : C.border}`, background: a ? C.tealDark+'55' : 'transparent', color: a ? '#ffffff' : C.textDim }),
+    typeRow:  { display:'flex', flexWrap:'wrap', gap:6, marginBottom:10 },
     btn:      (primary) => ({ padding:'8px 18px', borderRadius:6, fontSize:12, fontWeight:700, cursor:'pointer', border:'none', background: primary ? C.tealDark : '#1e3a46', color:'#fff' }),
     error:    { fontSize:11, color:C.warn },
+    hint:     { fontSize:10, color:C.textDim, marginTop:3 },
   };
-
-  const SEGS = [
-    { id:'bew', label:'Bewoners', color:'#2B5F6E' },
-    { id:'bez', label:'Bezoekers', color:'#9EC5CB' },
-    { id:'log', label:'Logistiek', color:'#D0AC41' },
-    { id:'ov',  label:'OV / Bus',  color:'#c89ecb' },
-  ];
 
   return (
     <div style={s.overlay} onClick={e => e.target === e.currentTarget && onClose()}>
@@ -105,7 +101,7 @@ export default function GemeenteEditor({ gemeente, onSave, onClose }) {
 
         <div style={s.tabs}>
           <div style={s.tab(activeTab==='gemeente')} onClick={() => setActiveTab('gemeente')}>Gemeente</div>
-          <div style={s.tab(activeTab==='wijken')}   onClick={() => setActiveTab('wijken')}>Wijken & Segmenten</div>
+          <div style={s.tab(activeTab==='wijken')}   onClick={() => setActiveTab('wijken')}>Wijken</div>
         </div>
 
         <div style={s.body}>
@@ -120,76 +116,82 @@ export default function GemeenteEditor({ gemeente, onSave, onClose }) {
                 <div style={s.row}>
                   <label style={s.label}>Inwoners</label>
                   <input style={s.input} type="number" value={inwoners} onChange={e => setInwoners(e.target.value)} />
-                  <div style={{ fontSize:10, color:C.textDim, marginTop:3 }}>Bron: Statbel</div>
+                  <div style={s.hint}>Bron: Statbel</div>
                 </div>
                 <div style={s.row}>
                   <label style={s.label}>Voertuigen</label>
                   <input style={s.input} type="number" value={voertuigen} onChange={e => setVoertuigen(e.target.value)} />
-                  <div style={{ fontSize:10, color:C.textDim, marginTop:3 }}>Bron: DIV / Febiac</div>
+                  <div style={s.hint}>Bron: DIV / Febiac</div>
                 </div>
+              </div>
+
+              <div style={s.grid2}>
+                <div style={s.row}>
+                  <label style={s.label}>Welvaartsindex</label>
+                  <input style={s.input} type="number" step="0.1" value={welvaartsindex} onChange={e => setWelvaartsindex(e.target.value)} />
+                  <div style={s.hint}>Statbel. Vlaams gemiddelde: 106,9. Bepaalt de lokale correctie op het Vlaamse EV-aandeel.</div>
+                </div>
+                <div style={s.row}>
+                  <label style={s.label}>Privé % (berekend)</label>
+                  <input style={s.input} type="number" min="0" max="100" value={privePctBerekend} onChange={e => setPrivePctBerekend(e.target.value)} />
+                  <div style={s.hint}>Stadsmonitor "private buitenruimte", of eigen straatdataset indien beschikbaar.</div>
+                </div>
+              </div>
+
+              <div style={s.row}>
+                <label style={s.label}>EV-aandeel override (optioneel, leeg = welvaartsindex-schatting)</label>
+                <div style={s.grid2}>
+                  <div>
+                    <input style={s.input} type="number" step="0.1" placeholder="2030 %" value={evOverride2030} onChange={e => setEvOverride2030(e.target.value)} />
+                    <div style={s.hint}>2030, in %</div>
+                  </div>
+                  <div>
+                    <input style={s.input} type="number" step="0.1" placeholder="2035 %" value={evOverride2035} onChange={e => setEvOverride2035(e.target.value)} />
+                    <div style={s.hint}>2035, in %</div>
+                  </div>
+                </div>
+                <div style={s.hint}>Alleen invullen als er een eigen, lokale EV-prognose beschikbaar is voor deze gemeente.</div>
               </div>
             </div>
           )}
 
           {activeTab === 'wijken' && (
             <div>
-              {wijken.map((wijk, idx) => {
-                const segTotaal = Object.values(wijk.seg).reduce((s,v) => s+v, 0);
-                const segOk = Math.abs(segTotaal - 1) < 0.02;
-                return (
-                  <div key={wijk.id} style={s.wijkCard}>
-                    <div style={s.wijkName}>{wijk.naam}</div>
+              {wijken.map((wijk, idx) => (
+                <div key={wijk.id} style={s.wijkCard}>
+                  <div style={s.wijkName}>{wijk.naam}</div>
 
-                    <div style={s.grid3}>
-                      <div>
-                        <label style={{ ...s.label, fontSize:10 }}>Inwoners</label>
-                        <input style={s.smallInp} type="number" value={wijk.inwoners}
-                          onChange={e => updateWijk(idx, 'inwoners', parseInt(e.target.value))} />
-                      </div>
-                      <div>
-                        <label style={{ ...s.label, fontSize:10 }}>Voertuigen</label>
-                        <input style={s.smallInp} type="number" value={wijk.voertuigen}
-                          onChange={e => updateWijk(idx, 'voertuigen', parseInt(e.target.value))} />
-                      </div>
-                      <div>
-                        <label style={{ ...s.label, fontSize:10 }}>% Appartementen</label>
-                        <input style={s.smallInp} type="number" min="0" max="100"
-                          value={Math.round((wijk.aandeel_app || 0.25) * 100)}
-                          onChange={e => updateWijk(idx, 'aandeel_app', e.target.value / 100)} />
-                      </div>
+                  <div style={s.grid3}>
+                    <div>
+                      <label style={{ ...s.label, fontSize:10 }}>Inwoners</label>
+                      <input style={s.smallInp} type="number" value={wijk.inwoners}
+                        onChange={e => updateWijk(idx, 'inwoners', parseInt(e.target.value))} />
                     </div>
-
-                    <label style={{ ...s.label, fontSize:10 }}>Wijktype (auto-invullen segmenten)</label>
-                    <div style={s.presets}>
-                      {Object.entries(WIJKTYPE_PRESETS).map(([key, p]) => (
-                        <div key={key} style={s.preset(wijk.wijktype === key)}
-                          onClick={() => applyPreset(idx, key)}>{p.label}</div>
-                      ))}
-                    </div>
-
-                    <label style={{ ...s.label, fontSize:10 }}>Segmentmix (optelsom = 100%)</label>
-                    <div style={s.segGrid}>
-                      {SEGS.map(seg => (
-                        <div key={seg.id} style={s.segRow}>
-                          <span style={{ ...s.segLabel, display:'flex', alignItems:'center', gap:5 }}>
-                            <span style={{ width:8, height:8, borderRadius:'50%', background:seg.color, display:'inline-block' }} />
-                            {seg.label}
-                          </span>
-                          <div style={{ display:'flex', alignItems:'center', gap:4 }}>
-                            <input style={s.segInp} type="number" min="0" max="100"
-                              value={Math.round((wijk.seg[seg.id] || 0) * 100)}
-                              onChange={e => updateSeg(idx, seg.id, e.target.value)} />
-                            <span style={{ fontSize:11, color:C.textDim }}>%</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    <div style={s.segSum(segOk)}>
-                      {segOk ? `✓ ${Math.round(segTotaal * 100)}%` : `⚠ ${Math.round(segTotaal * 100)}% — moet 100% zijn`}
+                    <div>
+                      <label style={{ ...s.label, fontSize:10 }}>Voertuigen</label>
+                      <input style={s.smallInp} type="number" value={wijk.voertuigen}
+                        onChange={e => updateWijk(idx, 'voertuigen', parseInt(e.target.value))} />
                     </div>
                   </div>
-                );
-              })}
+
+                  <label style={{ ...s.label, fontSize:10 }}>
+                    Wijktype (bepaalt de doelgroepenmix; meerdere aanvinken voor een hybride wijk, bijvoorbeeld wonen + werken)
+                  </label>
+                  <div style={s.typeRow}>
+                    {WIJKTYPES.map(t => (
+                      <div key={t.key} style={s.typeVak(wijk.wijktype.includes(t.key))}
+                        onClick={() => toggleWijktype(idx, t.key)}>{t.label}</div>
+                    ))}
+                  </div>
+
+                  <label style={{ ...s.label, fontSize:10 }}>
+                    OV-aandeel (los veld, standaard 0%, alleen invullen bij een bekend publiek/semi-publiek OV-laadpunt in deze wijk)
+                  </label>
+                  <input style={{ ...s.smallInp, width:100 }} type="number" min="0" max="100"
+                    value={Math.round((wijk.ovAandeel || 0) * 100)}
+                    onChange={e => updateWijk(idx, 'ovAandeel', (e.target.value === '' ? 0 : +e.target.value) / 100)} />
+                </div>
+              ))}
             </div>
           )}
 
