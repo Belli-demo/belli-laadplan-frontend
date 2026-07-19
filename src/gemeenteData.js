@@ -252,7 +252,12 @@ export function calcWijk(wijk, params) {
 
   // Ruimtelijke dekkingsondergrens (MOW 250m-norm), alleen relevant voor AC
   // (DC/HPC zijn geen "op loopafstand"-voorzieningen zoals normaal laden).
-  const dekkingAC = dekkingLaadpunten(wijk.oppervlakteKm2);
+  // De 250m-dekkingsnorm komt uit "Paal volgt Wagen", specifiek bedoeld voor
+  // bewoners zonder oprit die dicht bij huis willen laden. Die norm is niet
+  // van toepassing op een zuiver bedrijventerrein (geen bewoners, geen
+  // "dicht bij huis"-behoefte), dus telt daar niet mee als ondergrens.
+  const dekkingRelevant = types.some(t => t === 'woonwijk' || t === 'binnenstad');
+  const dekkingAC = dekkingRelevant ? dekkingLaadpunten(wijk.oppervlakteKm2) : 0;
   const totACGehanteerd = Math.max(totAC, dekkingAC);
   const dekkingBepalend = dekkingAC > totAC;
 
