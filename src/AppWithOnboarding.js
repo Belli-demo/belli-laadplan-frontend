@@ -624,7 +624,7 @@ export default function AppWithOnboarding() {
           onClick={e=>e.target===e.currentTarget&&setShowOverzicht(false)}>
           <div style={{width:720,maxHeight:'85vh',background:C.panelBg,border:`1px solid ${C.border}`,borderRadius:12,display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'0 20px 60px rgba(0,0,0,0.5)'}}>
             <div style={{padding:'16px 22px',borderBottom:`1px solid ${C.border}`,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-              <div style={{fontSize:15,fontWeight:800,color:C.text}}>{gemeente?.naam} — Wijkoverzicht {year}</div>
+              <div style={{fontSize:15,fontWeight:800,color:C.text}}>{gemeente?.naam}, Wijkoverzicht {year}</div>
               <span style={{cursor:'pointer',color:C.textDim,fontSize:20}} onClick={()=>setShowOverzicht(false)}>×</span>
             </div>
             <div style={{overflowY:'auto',flex:1}}>
@@ -817,7 +817,7 @@ export default function AppWithOnboarding() {
 
           {/* Totalen */}
           <div style={st.sec}>
-            <div style={st.sHdr}>Totaal {gemeente?.naam} – {year}</div>
+            <div style={st.sHdr}>Totaal {gemeente?.naam}, {year}</div>
             <div style={st.sBody}>
               <div style={st.stG}>
                 {[['Laadpunten nodig',fmtN(totLP),C.teal,'publiek domein'],
@@ -874,7 +874,9 @@ export default function AppWithOnboarding() {
               ['Laadpunten nodig (bruto)', Math.round(selectedResult.data.totLP)],
               ['Al aanwezig',              (selectedResult.data.bestaand.AC+selectedResult.data.bestaand.DC+selectedResult.data.bestaand.HPC).toFixed(1)],
               ['Nog te plaatsen',          selectedResult.data.deltaTotaal.toFixed(1)],
-              ['AC palen', Math.round(selectedResult.data.totAC)],
+              ['AC, obv energiebehoefte',  Math.round(selectedResult.data.totACEnergie)],
+              ['AC, obv dekking (250m)',   Math.round(selectedResult.data.dekkingAC)],
+              ['AC palen (gehanteerd)',    `${Math.round(selectedResult.data.totAC)}${selectedResult.data.dekkingBepalend ? ' (dekking bepalend)' : ''}`],
               ['DC palen', Math.round(selectedResult.data.totDC)],
               ['HPC palen', Math.round(selectedResult.data.totHPC)],
               ['MWh/jr',   Math.round(selectedResult.data.totMwh)],

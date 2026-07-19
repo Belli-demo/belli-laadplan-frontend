@@ -15,6 +15,7 @@ export const GEMEENTEN = {
     provincie: 'Vlaams-Brabant',
     inwoners: 104906,
     voertuigen: 48200,
+    oppervlakteKm2: 56.63, // extern geverifieerd (Stad Leuven, officiële opgave)
     welvaartsindex: 115, // TODO bij onboarding: exact Statbel-cijfer opzoeken, dit is een schatting
     privePctBerekend: 0.636, // extern geverifieerd: eigen straatniveau-dataset (1.077 straten)
     evAandeelOverride: { 2030: 0.376, 2035: 0.595 }, // afgeleid uit dezelfde straatniveau-dataset
@@ -23,14 +24,14 @@ export const GEMEENTEN = {
     bbox: [50.82, 4.65, 50.94, 4.77], // [south, west, north, east]
     kleur: '#2B5F6E',
     wijken: [
-      { id:'LV01', naam:'Leuven Centrum',       inwoners:18400, voertuigen:7200,  wijktype:['binnenstad'],       ovAandeel:0, lat:50.8793, lng:4.7009 },
-      { id:'LV02', naam:'Kessel-Lo',            inwoners:22100, voertuigen:9800,  wijktype:['woonwijk'],         ovAandeel:0, lat:50.8900, lng:4.7280 },
-      { id:'LV03', naam:'Heverlee',             inwoners:19600, voertuigen:9100,  wijktype:['woonwijk'],         ovAandeel:0, lat:50.8560, lng:4.7050 },
-      { id:'LV04', naam:'Wilsele',              inwoners:12300, voertuigen:5600,  wijktype:['woonwijk'],         ovAandeel:0, lat:50.9100, lng:4.7050 },
-      { id:'LV05', naam:'Wijgmaal',             inwoners:5200,  voertuigen:2400,  wijktype:['woonwijk'],         ovAandeel:0, lat:50.9280, lng:4.7120 },
-      { id:'LV06', naam:'Haasrode / Korbeek-Lo',inwoners:8900,  voertuigen:4200,  wijktype:['bedrijventerrein'], ovAandeel:0, lat:50.8420, lng:4.7400 },
-      { id:'LV07', naam:'Binnenstad Oost',      inwoners:9800,  voertuigen:3200,  wijktype:['binnenstad'],       ovAandeel:0, lat:50.8780, lng:4.7160 },
-      { id:'LV08', naam:'Arenberg / Wetensch.', inwoners:6200,  voertuigen:4800,  wijktype:['woonwijk'],         ovAandeel:0, lat:50.8640, lng:4.6880 },
+      { id:'LV01', naam:'Leuven Centrum',       inwoners:18400, voertuigen:7200,  wijktype:['binnenstad'],       ovAandeel:0, oppervlakteKm2:10.17, lat:50.8793, lng:4.7009 },
+      { id:'LV02', naam:'Kessel-Lo',            inwoners:22100, voertuigen:9800,  wijktype:['woonwijk'],         ovAandeel:0, oppervlakteKm2:12.21, lat:50.8900, lng:4.7280 },
+      { id:'LV03', naam:'Heverlee',             inwoners:19600, voertuigen:9100,  wijktype:['woonwijk'],         ovAandeel:0, oppervlakteKm2:10.83, lat:50.8560, lng:4.7050 },
+      { id:'LV04', naam:'Wilsele',              inwoners:12300, voertuigen:5600,  wijktype:['woonwijk'],         ovAandeel:0, oppervlakteKm2:6.80,  lat:50.9100, lng:4.7050 },
+      { id:'LV05', naam:'Wijgmaal',             inwoners:5200,  voertuigen:2400,  wijktype:['woonwijk'],         ovAandeel:0, oppervlakteKm2:2.87,  lat:50.9280, lng:4.7120 },
+      { id:'LV06', naam:'Haasrode / Korbeek-Lo',inwoners:8900,  voertuigen:4200,  wijktype:['bedrijventerrein'], ovAandeel:0, oppervlakteKm2:4.92,  lat:50.8420, lng:4.7400 },
+      { id:'LV07', naam:'Binnenstad Oost',      inwoners:9800,  voertuigen:3200,  wijktype:['binnenstad'],       ovAandeel:0, oppervlakteKm2:5.41,  lat:50.8780, lng:4.7160 },
+      { id:'LV08', naam:'Arenberg / Wetensch.', inwoners:6200,  voertuigen:4800,  wijktype:['woonwijk'],         ovAandeel:0, oppervlakteKm2:3.43,  lat:50.8640, lng:4.6880 },
     ],
   },
   olen: {
@@ -39,6 +40,7 @@ export const GEMEENTEN = {
     provincie: 'Antwerpen',
     inwoners: 14000,
     voertuigen: 8200,
+    oppervlakteKm2: 23.10, // extern geverifieerd (Wikipedia/officiële opgave)
     welvaartsindex: 92, // schatting, nog te verifiëren bij Statbel
     privePctBerekend: 0.70, // schatting, nog te verifiëren (Stadsmonitor)
     center: [51.1400, 4.8600],
@@ -46,10 +48,10 @@ export const GEMEENTEN = {
     bbox: [51.10, 4.82, 51.18, 4.91],
     kleur: '#3A6B4A',
     wijken: [
-      { id:'OL01', naam:'Olen Centrum',    inwoners:5200,  voertuigen:3100, wijktype:['binnenstad'],       ovAandeel:0, lat:51.1380, lng:4.8580 },
-      { id:'OL02', naam:'Olen Noord',      inwoners:3800,  voertuigen:2300, wijktype:['woonwijk'],         ovAandeel:0, lat:51.1520, lng:4.8550 },
-      { id:'OL03', naam:'Industriezone',   inwoners:800,   voertuigen:1200, wijktype:['bedrijventerrein'], ovAandeel:0, lat:51.1350, lng:4.8750 },
-      { id:'OL04', naam:'Olen Oost',       inwoners:4200,  voertuigen:2600, wijktype:['woonwijk'],         ovAandeel:0, lat:51.1380, lng:4.8820 },
+      { id:'OL01', naam:'Olen Centrum',    inwoners:5200,  voertuigen:3100, wijktype:['binnenstad'],       ovAandeel:0, oppervlakteKm2:8.58, lat:51.1380, lng:4.8580 },
+      { id:'OL02', naam:'Olen Noord',      inwoners:3800,  voertuigen:2300, wijktype:['woonwijk'],         ovAandeel:0, oppervlakteKm2:6.27, lat:51.1520, lng:4.8550 },
+      { id:'OL03', naam:'Industriezone',   inwoners:800,   voertuigen:1200, wijktype:['bedrijventerrein'], ovAandeel:0, oppervlakteKm2:1.32, lat:51.1350, lng:4.8750 },
+      { id:'OL04', naam:'Olen Oost',       inwoners:4200,  voertuigen:2600, wijktype:['woonwijk'],         ovAandeel:0, oppervlakteKm2:6.93, lat:51.1380, lng:4.8820 },
     ],
   },
   gent: {
@@ -58,6 +60,7 @@ export const GEMEENTEN = {
     provincie: 'Oost-Vlaanderen',
     inwoners: 268000,
     voertuigen: 112000,
+    oppervlakteKm2: 156.18, // extern geverifieerd (Wikipedia/officiële opgave)
     welvaartsindex: 98, // schatting, nog te verifiëren bij Statbel
     privePctBerekend: 0.60, // schatting, nog te verifiëren (Stadsmonitor)
     center: [51.0543, 3.7174],
@@ -65,12 +68,12 @@ export const GEMEENTEN = {
     bbox: [50.99, 3.64, 51.12, 3.80],
     kleur: '#9EC5CB',
     wijken: [
-      { id:'GN01', naam:'Gent Centrum',      inwoners:28000, voertuigen:9800,  wijktype:['binnenstad'],       ovAandeel:0, lat:51.0543, lng:3.7174 },
-      { id:'GN02', naam:'Ledeberg',          inwoners:18000, voertuigen:7200,  wijktype:['woonwijk'],         ovAandeel:0, lat:51.0380, lng:3.7350 },
-      { id:'GN03', naam:'Wondelgem',         inwoners:22000, voertuigen:9400,  wijktype:['woonwijk'],         ovAandeel:0, lat:51.0850, lng:3.7100 },
-      { id:'GN04', naam:'Mariakerke',        inwoners:19000, voertuigen:8200,  wijktype:['woonwijk'],         ovAandeel:0, lat:51.0620, lng:3.6900 },
-      { id:'GN05', naam:'Gentse Kanaalzone', inwoners:8000,  voertuigen:5800,  wijktype:['bedrijventerrein'], ovAandeel:0, lat:51.0900, lng:3.7500 },
-      { id:'GN06', naam:'Drongen',           inwoners:15000, voertuigen:6800,  wijktype:['woonwijk'],         ovAandeel:0, lat:51.0350, lng:3.6650 },
+      { id:'GN01', naam:'Gent Centrum',      inwoners:28000, voertuigen:9800,  wijktype:['binnenstad'],       ovAandeel:0, oppervlakteKm2:39.75, lat:51.0543, lng:3.7174 },
+      { id:'GN02', naam:'Ledeberg',          inwoners:18000, voertuigen:7200,  wijktype:['woonwijk'],         ovAandeel:0, oppervlakteKm2:25.56, lat:51.0380, lng:3.7350 },
+      { id:'GN03', naam:'Wondelgem',         inwoners:22000, voertuigen:9400,  wijktype:['woonwijk'],         ovAandeel:0, oppervlakteKm2:31.24, lat:51.0850, lng:3.7100 },
+      { id:'GN04', naam:'Mariakerke',        inwoners:19000, voertuigen:8200,  wijktype:['woonwijk'],         ovAandeel:0, oppervlakteKm2:26.98, lat:51.0620, lng:3.6900 },
+      { id:'GN05', naam:'Gentse Kanaalzone', inwoners:8000,  voertuigen:5800,  wijktype:['bedrijventerrein'], ovAandeel:0, oppervlakteKm2:11.36, lat:51.0900, lng:3.7500 },
+      { id:'GN06', naam:'Drongen',           inwoners:15000, voertuigen:6800,  wijktype:['woonwijk'],         ovAandeel:0, oppervlakteKm2:21.30, lat:51.0350, lng:3.6650 },
     ],
   },
 };
@@ -128,6 +131,27 @@ function dcHpcGroeiPct(jaar) {
 export const REDUNDANTIE_MARGE = 0.10; // dekt ook "Paal volgt Wagen", zie Leeswijzer §7
 
 export const YEARS = [2025, 2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033, 2034, 2035];
+
+// ── Dekkingsnorm (ruimtelijke ondergrens) ───────────────────────────────
+// MOW: gemeenten zonder goedgekeurd strategisch laadplan zijn verplicht
+// "Paal volgt Wagen" met een norm van maximaal 250 meter tussen aanvrager
+// en laadpaal uit te voeren (VR-besluit, dec. 2025). Een strategisch
+// laadplan mag hiervan afwijken, maar dit is de baseline waar onze eigen,
+// planmatige aanpak zich minstens tegen zou moeten kunnen verantwoorden.
+// Vertaald naar een dekkingscirkel van de helft (125m straal) per laadpunt.
+export const DEKKING_AFSTAND_M = 250;
+const DEKKING_STRAAL_KM = (DEKKING_AFSTAND_M / 2) / 1000;
+const DEKKING_OPPERVLAK_PER_LP_KM2 = Math.PI * DEKKING_STRAAL_KM * DEKKING_STRAAL_KM;
+
+/**
+ * Minimaal aantal laadpunten voor ruimtelijke dekking van een wijk,
+ * los van de energiebehoefte (MOW's 250m-norm als baseline).
+ * @param {number} oppervlakteKm2
+ */
+export function dekkingLaadpunten(oppervlakteKm2) {
+  if (!oppervlakteKm2) return 0;
+  return oppervlakteKm2 / DEKKING_OPPERVLAK_PER_LP_KM2;
+}
 
 // ── Stap 1: EV-aandeel ─────────────────────────────────────────────────
 function interpoleerEvAandeelVlaanderen(jaar) {
@@ -226,10 +250,17 @@ export function calcWijk(wijk, params) {
   const totDC  = (mwhDC  / dcPerJaar)  * (1 + redundantieMarge);
   const totHPC = (mwhHPC / hpcPerJaar) * (1 + redundantieMarge);
 
+  // Ruimtelijke dekkingsondergrens (MOW 250m-norm), alleen relevant voor AC
+  // (DC/HPC zijn geen "op loopafstand"-voorzieningen zoals normaal laden).
+  const dekkingAC = dekkingLaadpunten(wijk.oppervlakteKm2);
+  const totACGehanteerd = Math.max(totAC, dekkingAC);
+  const dekkingBepalend = dekkingAC > totAC;
+
   return {
     evs, evPct, privePct: gebruiktPrivePct,
     totMwh, mwhPubliek, mwhAC, mwhDC, mwhHPC,
-    totAC, totDC, totHPC,
-    totLP: totAC + totDC + totHPC,
+    totAC: totACGehanteerd, totACEnergie: totAC, dekkingAC, dekkingBepalend,
+    totDC, totHPC,
+    totLP: totACGehanteerd + totDC + totHPC,
   };
 }
