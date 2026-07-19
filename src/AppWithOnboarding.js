@@ -844,9 +844,9 @@ export default function AppWithOnboarding() {
           <div style={{fontSize:13,fontWeight:700}}>{gemeente?.naam} · {year}</div>
           <div style={{fontSize:11,color:C.textDim}}>
             <span style={{width:7,height:7,borderRadius:'50%',background:'#4CAF50',display:'inline-block',marginRight:5,animation:'pulse 2s infinite'}}></span>
-            {loadingPalen?'Laden…':`${existingPalen.length} bestaande LP (MOW)`}
+            {loadingPalen?'Laden…':`${existingPalen.length} laadpunten op kaart (MOW)`}
             &nbsp;·&nbsp;
-            <strong style={{color:C.teal}}>{Math.round(100-(wijkResults[0]?.data.privePct||0)*100)}% publiek+semi-publiek</strong>
+            <strong style={{color:C.teal}}>{(bestaandTotaalPerType.AC+bestaandTotaalPerType.DC+bestaandTotaalPerType.HPC).toFixed(0)} gewogen (Publiek + 50% semi-publiek)</strong>
             <button onClick={() => setShowOverzicht(true)} style={{
               marginLeft:12, padding:'3px 12px', borderRadius:5, fontSize:11,
               fontWeight:700, cursor:'pointer', border:`1px solid ${C.tealDark}`,
