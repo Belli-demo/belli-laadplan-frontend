@@ -187,9 +187,24 @@ export default function GemeenteEditor({ gemeente, onSave, onClose }) {
                   <label style={{ ...s.label, fontSize:10 }}>
                     OV-aandeel (los veld, standaard 0%, alleen invullen bij een bekend publiek/semi-publiek OV-laadpunt in deze wijk)
                   </label>
-                  <input style={{ ...s.smallInp, width:100 }} type="number" min="0" max="100"
+                  <input style={{ ...s.smallInp, width:100, marginBottom:10 }} type="number" min="0" max="100"
                     value={Math.round((wijk.ovAandeel || 0) * 100)}
                     onChange={e => updateWijk(idx, 'ovAandeel', (e.target.value === '' ? 0 : +e.target.value) / 100)} />
+
+                  <label style={{ ...s.label, fontSize:10 }}>
+                    Oppervlakte (km², voor de dekkingsnorm van 250m uit Stap 4)
+                  </label>
+                  <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                    <input style={{ ...s.smallInp, width:100 }} type="number" min="0" step="0.01"
+                      value={wijk.oppervlakteKm2 ?? ''}
+                      onChange={e => {
+                        updateWijk(idx, 'oppervlakteKm2', e.target.value === '' ? null : +e.target.value);
+                        updateWijk(idx, 'oppervlakteIsProxy', false);
+                      }} />
+                    {wijk.oppervlakteIsProxy !== false && (
+                      <span style={{ fontSize:10, color:C.gold }}>schatting, geen gemeten grens</span>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
