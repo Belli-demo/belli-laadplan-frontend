@@ -1,5 +1,4 @@
 import React, { useState, useCallback } from 'react';
-import { SEG_PARAMS } from '../gemeenteData';
 
 // ── Kleuren ─────────────────────────────────────────────────────────
 const C = {
@@ -9,18 +8,17 @@ const C = {
   text:'#e0eef2', textMid:'#7aacb4', textDim:'#3a6a74',
 };
 
-// ── Wijktype → standaard segmentmix ─────────────────────────────────
-const WIJKTYPE_PRESETS = {
-  centrum:      { label:'Centrum / Binnenstad', seg:{ bew:0.38, bez:0.42, log:0.12, ov:0.08 }, app:0.55 },
-  residentieel: { label:'Residentieel',          seg:{ bew:0.68, bez:0.18, log:0.10, ov:0.04 }, app:0.22 },
-  gemengd:      { label:'Gemengd wonen/werken',  seg:{ bew:0.52, bez:0.28, log:0.14, ov:0.06 }, app:0.32 },
-  industrieel:  { label:'Industrie / Bedrijven', seg:{ bew:0.22, bez:0.18, log:0.52, ov:0.08 }, app:0.10 },
-  studentenwijk:{ label:'Studentenwijk / Campus', seg:{ bew:0.45, bez:0.35, log:0.12, ov:0.08 }, app:0.65 },
-  landelijk:    { label:'Landelijk / Randstedelijk', seg:{ bew:0.72, bez:0.15, log:0.10, ov:0.03 }, app:0.12 },
-};
+// Zelfde drie wijktypes als het gevalideerde rekenmodel (zie Leeswijzer §5).
+// Een wijk kan er meerdere aanvinken (bijvoorbeeld woonwijk + bedrijventerrein
+// voor een hybride wijk); calcWijk middelt dan de bijbehorende doelgroepenmix.
+const WIJKTYPES = [
+  { key:'binnenstad',       label:'Binnenstad' },
+  { key:'woonwijk',         label:'Woonwijk' },
+  { key:'bedrijventerrein', label:'Bedrijventerrein' },
+];
 
 // ── Stap-labels ──────────────────────────────────────────────────────
-const STAPPEN = ['Gemeente zoeken', 'Wijken & Data', 'Segmentmix', 'Bevestiging'];
+const STAPPEN = ['Gemeente zoeken', 'Wijken & Data', 'Wijktype', 'Bevestiging'];
 
 // ── API calls ────────────────────────────────────────────────────────
 
@@ -88,6 +86,8 @@ export default function GemeenteOnboarding({ onComplete, onClose }) {
   const [gemeenteNaam,  setGemeenteNaam] = useState('');
   const [inwoners,      setInwoners]     = useState('');
   const [voertuigen,    setVoertuigen]   = useState('');
+  const [welvaartsindex,setWelvaartsindex] = useState('106.9');
+  const [privePct,      setPrivePct]     = useState('50');
 
   // Wijk editing
   const [editIdx,       setEditIdx]      = useState(null);
@@ -119,9 +119,8 @@ export default function GemeenteOnboarding({ onComplete, onClose }) {
           id:          `NK${String(i+1).padStart(2,'0')}`,
           inwoners:    Math.round(inwSchat / Math.max(wkData.length, 1) / 100) * 100,
           voertuigen:  Math.round(inwSchat * 0.45 / Math.max(wkData.length, 1) / 50) * 50,
-          aandeel_app: 0.25,
-          wijktype:    'residentieel',
-          seg:         { ...WIJKTYPE_PRESETS.residentieel.seg },
+          wijktype:    ['woonwijk'],
+          ovAandeel:   0,
           actief:      true,
         })));
       } else {
@@ -135,9 +134,8 @@ export default function GemeenteOnboarding({ onComplete, onClose }) {
           lng:         geo.center[1] + (offsets[i]?.[1] || 0),
           inwoners:    Math.round(inwSchat / 4 / 100) * 100,
           voertuigen:  Math.round(inwSchat * 0.45 / 4 / 50) * 50,
-          aandeel_app: 0.25,
-          wijktype:    'residentieel',
-          seg:         { ...WIJKTYPE_PRESETS.residentieel.seg },
+          wijktype:    ['woonwijk'],
+          ovAandeel:   0,
           actief:      true,
         })));
       }
@@ -148,12 +146,15 @@ export default function GemeenteOnboarding({ onComplete, onClose }) {
     setLoading(false);
   }, [zoekNaam, land]);
 
-  // ── Stap 2: wijktype wijzigen → autovul seg + app ────────────────
-  const setWijktype = (idx, type) => {
-    const preset = WIJKTYPE_PRESETS[type];
-    setWijken(ws => ws.map((w, i) => i === idx
-      ? { ...w, wijktype: type, seg: { ...preset.seg }, aandeel_app: preset.app }
-      : w));
+  // ── Stap 2: wijktype aan/uit ──────────────────────────────────────
+  const toggleWijktype = (idx, key) => {
+    setWijken(ws => ws.map((w, i) => {
+      if (i !== idx) return w;
+      const huidig = w.wijktype || [];
+      const heeft = huidig.includes(key);
+      const nieuw = heeft ? huidig.filter(t => t !== key) : [...huidig, key];
+      return { ...w, wijktype: nieuw.length ? nieuw : ['woonwijk'] }; // nooit helemaal leeg
+    }));
   };
 
   const updateWijk = (idx, field, val) => {
@@ -170,8 +171,8 @@ export default function GemeenteOnboarding({ onComplete, onClose }) {
       id:`NK${String(n).padStart(2,'0')}`, naam:`Wijk ${n}`,
       lat: geoData.center[0] + (Math.random()-0.5)*0.02,
       lng: geoData.center[1] + (Math.random()-0.5)*0.02,
-      inwoners: 5000, voertuigen: 2000, aandeel_app: 0.25,
-      wijktype:'residentieel', seg:{ ...WIJKTYPE_PRESETS.residentieel.seg }, actief:true,
+      inwoners: 5000, voertuigen: 2000,
+      wijktype:['woonwijk'], ovAandeel:0, actief:true,
     }]);
   };
 
@@ -186,19 +187,21 @@ export default function GemeenteOnboarding({ onComplete, onClose }) {
       provincie: land,
       inwoners:  parseInt(inwoners) || 50000,
       voertuigen:parseInt(voertuigen) || 22000,
+      welvaartsindex:   parseFloat(welvaartsindex) || 106.9,
+      privePctBerekend: (parseFloat(privePct) || 50) / 100,
       center:    geoData.center,
       zoom:      13,
       bbox:      geoData.bbox,
       kleur,
       wijken:    actieveWijken.map(w => ({
-        id:          w.id,
-        naam:        w.naam,
-        inwoners:    parseInt(w.inwoners) || 5000,
-        voertuigen:  parseInt(w.voertuigen) || 2000,
-        aandeel_app: parseFloat(w.aandeel_app) || 0.25,
-        lat:         w.lat,
-        lng:         w.lng,
-        seg:         w.seg,
+        id:         w.id,
+        naam:       w.naam,
+        inwoners:   parseInt(w.inwoners) || 5000,
+        voertuigen: parseInt(w.voertuigen) || 2000,
+        wijktype:   w.wijktype && w.wijktype.length ? w.wijktype : ['woonwijk'],
+        ovAandeel:  w.ovAandeel || 0,
+        lat:        w.lat,
+        lng:        w.lng,
       })),
     };
     onComplete(gemeente);
@@ -221,16 +224,13 @@ export default function GemeenteOnboarding({ onComplete, onClose }) {
     row:      { marginBottom:14 },
     btn:      (primary) => ({ padding:'8px 20px', borderRadius:6, fontSize:12, fontWeight:700, cursor:'pointer', border:'none', background: primary ? C.tealDark : '#1e3a46', color:'#fff', transition:'all 0.15s' }),
     error:    { background:'#3a0a0a', border:`1px solid ${C.warn}`, borderRadius:6, padding:'8px 12px', fontSize:11, color:C.warn, marginTop:8 },
-    tag:      (active) => ({ display:'inline-block', padding:'3px 10px', borderRadius:4, fontSize:10, fontWeight:700, cursor:'pointer', margin:'3px 3px 3px 0', border:`1px solid ${active ? C.tealDark : C.border}`, background: active ? C.tealDark+'44' : 'transparent', color: active ? C.teal : C.textDim }),
+    tag:      (active) => ({ display:'inline-block', padding:'3px 10px', borderRadius:4, fontSize:10, fontWeight:700, cursor:'pointer', margin:'3px 3px 3px 0', border:`1px solid ${active ? C.tealDark : C.border}`, background: active ? C.tealDark+'44' : 'transparent', color: active ? '#ffffff' : C.textDim }),
     wijkCard: (actief) => ({ background:'#0a1620', border:`1px solid ${actief ? C.border : '#0f2430'}`, borderRadius:8, padding:'12px 14px', marginBottom:8, opacity: actief ? 1 : 0.45 }),
     grid2:    { display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 },
     grid3:    { display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 },
     hint:     { fontSize:10, color:C.textDim, marginTop:3, lineHeight:1.5 },
     divider:  { borderTop:`1px solid ${C.border}`, margin:'16px 0' },
     badge:    (color) => ({ display:'inline-block', padding:'2px 8px', borderRadius:3, fontSize:9, fontWeight:700, background:color+'22', color, border:`1px solid ${color}44` }),
-    segRow:   { display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 },
-    segLabel: { fontSize:11, color:C.textMid },
-    segPct:   { fontSize:12, fontWeight:700, color:C.teal },
     autoTag:  { fontSize:9, color:C.gold, background:'#D0AC4122', padding:'1px 6px', borderRadius:3, marginLeft:6 },
   };
 
@@ -291,7 +291,7 @@ export default function GemeenteOnboarding({ onComplete, onClose }) {
                 <div>✓ Geografisch middelpunt &amp; bounding box (Nominatim / OSM)</div>
                 <div>✓ Bestaande wijken &amp; buurtnamen (Overpass API)</div>
                 <div>✓ Schatting inwoners op basis van oppervlakte</div>
-                <div style={{ color:C.gold, marginTop:4 }}>⚡ Segmentmix en woningtypes: jij stelt in per wijk</div>
+                <div style={{ color:C.gold, marginTop:4 }}>⚡ Wijktype, welvaartsindex en privé%: jij stelt in / controleert</div>
               </div>
             </div>
           )}
@@ -312,12 +312,22 @@ export default function GemeenteOnboarding({ onComplete, onClose }) {
                 <div style={s.row}>
                   <label style={s.label}>Totaal inwoners</label>
                   <input style={s.input} type="number" value={inwoners} onChange={e => setInwoners(e.target.value)} />
-                  <div style={s.hint}>Bron: Statbel · leuven.be/cijfers</div>
+                  <div style={s.hint}>Bron: Statbel</div>
                 </div>
                 <div style={s.row}>
                   <label style={s.label}>Totaal voertuigen</label>
                   <input style={s.input} type="number" value={voertuigen} onChange={e => setVoertuigen(e.target.value)} />
                   <div style={s.hint}>Bron: DIV / Febiac wagenpark</div>
+                </div>
+                <div style={s.row}>
+                  <label style={s.label}>Welvaartsindex</label>
+                  <input style={s.input} type="number" step="0.1" value={welvaartsindex} onChange={e => setWelvaartsindex(e.target.value)} />
+                  <div style={s.hint}>Statbel. Vlaams gemiddelde: 106,9. Corrigeert het Vlaamse EV-aandeel lokaal.</div>
+                </div>
+                <div style={s.row}>
+                  <label style={s.label}>Privé % (berekend)</label>
+                  <input style={s.input} type="number" min="0" max="100" value={privePct} onChange={e => setPrivePct(e.target.value)} />
+                  <div style={s.hint}>Stadsmonitor "private buitenruimte", of eigen dataset indien beschikbaar.</div>
                 </div>
               </div>
 
@@ -356,7 +366,7 @@ export default function GemeenteOnboarding({ onComplete, onClose }) {
                   </div>
 
                   {wijk.actief && (
-                    <div style={s.grid3}>
+                    <div style={s.grid2}>
                       <div>
                         <label style={{ ...s.label, fontSize:10 }}>Inwoners</label>
                         <input style={{ ...s.input, fontSize:11, padding:'5px 8px' }}
@@ -369,13 +379,6 @@ export default function GemeenteOnboarding({ onComplete, onClose }) {
                           type="number" value={wijk.voertuigen}
                           onChange={e => updateWijk(idx, 'voertuigen', e.target.value)} />
                       </div>
-                      <div>
-                        <label style={{ ...s.label, fontSize:10 }}>% Appartementen</label>
-                        <input style={{ ...s.input, fontSize:11, padding:'5px 8px' }}
-                          type="number" min="0" max="100" step="1"
-                          value={Math.round((parseFloat(wijk.aandeel_app)||0.25)*100)}
-                          onChange={e => updateWijk(idx, 'aandeel_app', e.target.value/100)} />
-                      </div>
                     </div>
                   )}
                 </div>
@@ -383,60 +386,44 @@ export default function GemeenteOnboarding({ onComplete, onClose }) {
             </div>
           )}
 
-          {/* ══ STAP 2: SEGMENTMIX ══════════════════════════════════ */}
+          {/* ══ STAP 2: WIJKTYPE ══════════════════════════════════════ */}
           {stap === 2 && (
             <div>
               <div style={{ fontSize:11, color:C.textDim, marginBottom:16, lineHeight:1.7 }}>
-                De segmentmix bepaalt hoe de publieke laadvraag verdeeld is over bewoners, bezoekers,
-                logistiek en OV. Kies het <strong style={{color:C.teal}}>wijktype</strong> — de mix wordt automatisch ingevuld.
-                Je kunt daarna handmatig bijstellen.
+                Het <strong style={{color:C.teal}}>wijktype</strong> bepaalt automatisch de doelgroepenmix (bewoners,
+                bezoekers, logistiek) van een wijk. Vink meerdere types aan voor een hybride wijk, bijvoorbeeld
+                wonen + werken; het model middelt dan de bijbehorende mixen. OV telt alleen mee als je zelf een
+                percentage invult, want openbaar vervoer laadt doorgaans op een eigen depot, niet op straat.
               </div>
 
-              {wijken.filter(w=>w.actief).map((wijk, origIdx) => {
+              {wijken.filter(w=>w.actief).map((wijk) => {
                 const idx = wijken.indexOf(wijk);
-                const segTotaal = Object.values(wijk.seg).reduce((s,v)=>s+v,0);
-                const segOk = Math.abs(segTotaal - 1) < 0.02;
                 return (
                   <div key={wijk.id} style={{ ...s.wijkCard(true), marginBottom:14 }}>
                     <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
                       <div style={{ fontSize:12, fontWeight:700, color:C.text }}>{wijk.naam}</div>
-                      <span style={segOk ? s.badge(C.green) : s.badge(C.warn)}>
-                        {segOk ? `✓ ${Math.round(segTotaal*100)}%` : `⚠ ${Math.round(segTotaal*100)}% ≠ 100%`}
-                      </span>
                     </div>
 
                     <div style={{ marginBottom:10 }}>
-                      <label style={s.label}>Wijktype <span style={s.autoTag}>AUTO-INVULLEN</span></label>
+                      <label style={s.label}>Wijktype</label>
                       <div style={{ display:'flex', flexWrap:'wrap' }}>
-                        {Object.entries(WIJKTYPE_PRESETS).map(([key, preset]) => (
-                          <div key={key} style={s.tag(wijk.wijktype===key)}
-                            onClick={() => setWijktype(idx, key)}>
-                            {preset.label}
+                        {WIJKTYPES.map(t => (
+                          <div key={t.key} style={s.tag((wijk.wijktype||[]).includes(t.key))}
+                            onClick={() => toggleWijktype(idx, t.key)}>
+                            {t.label}
                           </div>
                         ))}
                       </div>
                     </div>
 
-                    <div style={s.grid2}>
-                      {Object.entries(SEG_PARAMS).map(([sid, p]) => (
-                        <div key={sid} style={s.segRow}>
-                          <span style={{ ...s.segLabel, display:'flex', alignItems:'center', gap:6 }}>
-                            <span style={{ width:8, height:8, borderRadius:'50%', background:p.color, display:'inline-block' }} />
-                            {p.label}
-                          </span>
-                          <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                            <input
-                              type="number" min="0" max="100" step="1"
-                              style={{ width:56, background:'#0f1e24', border:`1px solid ${C.border}`, borderRadius:4, padding:'3px 6px', color:C.text, fontSize:12, textAlign:'right' }}
-                              value={Math.round((wijk.seg[sid]||0)*100)}
-                              onChange={e => {
-                                const newSeg = { ...wijk.seg, [sid]: e.target.value/100 };
-                                setWijken(ws => ws.map((w,i) => i===idx ? {...w, seg:newSeg} : w));
-                              }} />
-                            <span style={s.segPct}>%</span>
-                          </div>
-                        </div>
-                      ))}
+                    <div>
+                      <label style={s.label}>OV-aandeel (standaard 0%, alleen bij een bekend publiek/semi-publiek OV-laadpunt)</label>
+                      <input
+                        type="number" min="0" max="100" step="1"
+                        style={{ width:80, background:'#0f1e24', border:`1px solid ${C.border}`, borderRadius:4, padding:'5px 8px', color:C.text, fontSize:12 }}
+                        value={Math.round((wijk.ovAandeel||0)*100)}
+                        onChange={e => updateWijk(idx, 'ovAandeel', (e.target.value===''?0:+e.target.value)/100)} />
+                      <span style={{ fontSize:11, color:C.textDim, marginLeft:6 }}>%</span>
                     </div>
                   </div>
                 );
@@ -455,6 +442,8 @@ export default function GemeenteOnboarding({ onComplete, onClose }) {
                     ['Bbox',        geoData?.bbox.map(v=>v.toFixed(3)).join(', ')],
                     ['Inwoners',    parseInt(inwoners).toLocaleString('nl-NL')],
                     ['Voertuigen',  parseInt(voertuigen).toLocaleString('nl-NL')],
+                    ['Welvaartsindex', welvaartsindex],
+                    ['Privé %',     `${privePct}%`],
                     ['Actieve wijken', wijken.filter(w=>w.actief).length],
                     ['Land',        land],
                   ].map(([l,v]) => (
@@ -472,16 +461,16 @@ export default function GemeenteOnboarding({ onComplete, onClose }) {
                   <span style={{ color:C.text, fontWeight:600 }}>{wijk.naam}</span>
                   <span style={{ color:C.textDim }}>
                     {parseInt(wijk.inwoners).toLocaleString('nl-NL')} inw. ·{' '}
-                    {Math.round(wijk.aandeel_app*100)}% app. ·{' '}
-                    {wijk.wijktype}
+                    {(wijk.wijktype||[]).join(' + ')}
+                    {wijk.ovAandeel > 0 ? ` · OV ${Math.round(wijk.ovAandeel*100)}%` : ''}
                   </span>
                 </div>
               ))}
 
               <div style={{ marginTop:16, padding:'10px 14px', background:'#0a2010', border:`1px solid ${C.darkGreen}`, borderRadius:6, fontSize:11, color:C.green, lineHeight:1.7 }}>
                 ✓ Na bevestiging is de gemeente direct beschikbaar in de laadkaart.<br/>
-                ✓ Bestaande laadpalen worden live opgehaald via OpenStreetMap.<br/>
-                ✓ De simulatorparameters gelden direct voor alle wijken.
+                ✓ Bestaande laadpalen worden live opgehaald via de officiële MOW-dataset.<br/>
+                ✓ De rekenparameters gelden direct voor alle wijken.
               </div>
             </div>
           )}
@@ -493,7 +482,7 @@ export default function GemeenteOnboarding({ onComplete, onClose }) {
           <div style={{ fontSize:11, color:C.textDim }}>
             {stap === 0 && 'Typ een gemeentenaam en druk Enter of klik Zoeken'}
             {stap === 1 && `${wijken.filter(w=>w.actief).length} wijken gevonden via OpenStreetMap`}
-            {stap === 2 && 'Segmentmix wordt automatisch ingevuld op basis van wijktype'}
+            {stap === 2 && 'Wijktype bepaalt automatisch de doelgroepenmix'}
             {stap === 3 && 'Klaar om toe te voegen'}
           </div>
           <div style={{ display:'flex', gap:10 }}>
