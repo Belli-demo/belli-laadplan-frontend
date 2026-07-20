@@ -194,13 +194,14 @@ export default function AppWithOnboarding() {
   const totMwh      = wijkResults.reduce((s,r)=>s+r.data.totMwh,0);
   const totCapex    = wijkResults.reduce((s,r)=>s+r.data.capex,0);
   const totBestaand = wijkResults.reduce((s,r)=>s+r.data.bestaand.AC+r.data.bestaand.DC+r.data.bestaand.HPC,0);
-  // Bijkomend (stadsbreed) = totaal nodig - totaal aanwezig - gepland.
-  // Simpel, stadsbreed verschil, consistent met de zichtbare 'X bestaande LP'
-  // en 'Laadpunten nodig'-cijfers. Dit is bewust ANDERS dan de per-wijk
-  // .delta hierboven (die nooit negatief wordt per wijk, want een overschot
-  // in de ene wijk lost geen tekort in een andere wijk op) — die per-wijk
-  // logica blijft gelden voor de kaartkleur, tooltips en de wijktabel.
-  const bijkomend = Math.max(0, totLP - totBestaand - huidigLP);
+  // Bijkomend (stadsbreed) = optelling van wat elke wijk zelf al, per type,
+  // nooit-negatief aangeeft nodig te hebben (dezelfde .delta als hieronder
+  // voor de kaartkleur/tooltips/wijktabel). Bewust GEEN aparte, stadsbrede
+  // netto-berekening (totLP - totBestaand), want dan kan een overschot in
+  // de ene wijk een tekort in een andere wijk verbergen, terwijl bestaande
+  // infrastructuur in wijk A een tekort in wijk B niet kan oplossen.
+  const bijkomendPerWijk = wijkResults.reduce((s,r)=>s+r.data.deltaTotaal,0);
+  const bijkomend = Math.max(0, bijkomendPerWijk - huidigLP);
   // CAPEX-tegel: bruto bouwkost stadsbreed, verhoudingsgewijs verminderd met
   // dezelfde stadsbrede bijkomend/totLP-ratio (grove schatting, geen exacte
   // kost per laadpaaltype omdat we niet weten welk type paal al bestaat of
@@ -212,13 +213,17 @@ export default function AppWithOnboarding() {
     const res = (gemeente?.wijken||[]).map(w => {
       const d = calcWijk(w, p);
       const bestaand = bestaandPerWijk[w.id] || leegType();
+      const delta = {
+        AC:  Math.max(0, d.totAC  - bestaand.AC),
+        DC:  Math.max(0, d.totDC  - bestaand.DC),
+        HPC: Math.max(0, d.totHPC - bestaand.HPC),
+      };
       const capex = d.totAC*CAPEX_V2.AC + d.totDC*CAPEX_V2.DC + d.totHPC*CAPEX_V2.HPC;
-      return { ...d, bestaand, capex };
+      return { ...d, bestaand, delta, deltaTotaal: delta.AC+delta.DC+delta.HPC, capex };
     });
     const totLPJaar      = res.reduce((s,r)=>s+r.totLP,0);
-    const totBestaandJaar = res.reduce((s,r)=>s+r.bestaand.AC+r.bestaand.DC+r.bestaand.HPC,0);
     const totCapexJaar    = res.reduce((s,r)=>s+r.capex,0);
-    const bijkomendJaar = Math.max(0, totLPJaar - totBestaandJaar - huidigLP);
+    const bijkomendJaar = Math.max(0, res.reduce((s,r)=>s+r.deltaTotaal,0) - huidigLP);
     const capexNu = totLPJaar > 0 ? totCapexJaar * (bijkomendJaar / totLPJaar) : 0;
     return {
       jaar:yr,
@@ -422,7 +427,7 @@ export default function AppWithOnboarding() {
         const fillColor = match ? kwantielKleur(match.data.deltaTotaal, alleDeltas) : '#5a6a72';
         const bestaandSom = match ? (match.data.bestaand.AC+match.data.bestaand.DC+match.data.bestaand.HPC) : 0;
         const tooltip   = match
-          ? `<b>${match.wijk.naam}</b><br>${Math.round(match.data.totLP)} nodig (bruto) · ${bestaandSom.toFixed(1)} aanwezig · <b>${match.data.deltaTotaal.toFixed(1)} bijkomend</b><br>${Math.round(mwh)} MWh/jr`
+          ? `<b>${match.wijk.naam}</b><br>${Math.round(match.data.totLP)} nodig (bruto) · ${bestaandSom.toFixed(1)} aanwezig (gewogen) · <b>${match.data.deltaTotaal.toFixed(1)} bijkomend</b><br>AC ${match.data.delta.AC.toFixed(1)} · DC ${match.data.delta.DC.toFixed(1)} · HPC ${match.data.delta.HPC.toFixed(1)}<br>${Math.round(mwh)} MWh/jr`
           : `<b>${naam}</b><br>Geen wijkkoppeling`;
 
         try {
@@ -469,7 +474,7 @@ export default function AppWithOnboarding() {
       L.circle([wijk.lat, wijk.lng], {
         radius:300+data.deltaTotaal*18, color:fc, weight:2, fillColor:fc, fillOpacity:0.22,
       })
-      .bindTooltip(`<b>${wijk.naam}</b><br>${Math.round(data.totLP)} nodig (bruto) · ${bestaandSom.toFixed(1)} aanwezig · <b>${data.deltaTotaal.toFixed(1)} bijkomend</b><br>${Math.round(data.totMwh)} MWh/jr`)
+      .bindTooltip(`<b>${wijk.naam}</b><br>${Math.round(data.totLP)} nodig (bruto) · ${bestaandSom.toFixed(1)} aanwezig (gewogen) · <b>${data.deltaTotaal.toFixed(1)} bijkomend</b><br>AC ${data.delta.AC.toFixed(1)} · DC ${data.delta.DC.toFixed(1)} · HPC ${data.delta.HPC.toFixed(1)}<br>${Math.round(data.totMwh)} MWh/jr`)
       .on('click', () => setSelectedWijk(wijk.id))
       .addTo(wg);
 
@@ -872,13 +877,15 @@ export default function AppWithOnboarding() {
             </div>
             {[
               ['Laadpunten nodig (bruto)', Math.round(selectedResult.data.totLP)],
-              ['Al aanwezig',              (selectedResult.data.bestaand.AC+selectedResult.data.bestaand.DC+selectedResult.data.bestaand.HPC).toFixed(1)],
+              ['Al aanwezig (totaal, gewogen)', (selectedResult.data.bestaand.AC+selectedResult.data.bestaand.HPC+selectedResult.data.bestaand.DC).toFixed(1)],
               ['Nog te plaatsen',          selectedResult.data.deltaTotaal.toFixed(1)],
               ['AC, obv energiebehoefte',  Math.round(selectedResult.data.totACEnergie)],
               ['AC, obv dekking (250m)',   Math.round(selectedResult.data.dekkingAC)],
               ['AC palen (gehanteerd)',    `${Math.round(selectedResult.data.totAC)}${selectedResult.data.dekkingBepalend ? ' (dekking bepalend)' : ''}`],
-              ['DC palen', Math.round(selectedResult.data.totDC)],
-              ['HPC palen', Math.round(selectedResult.data.totHPC)],
+              ['AC al aanwezig',           selectedResult.data.bestaand.AC.toFixed(1)],
+              ['AC nog te plaatsen',       selectedResult.data.delta.AC.toFixed(1)],
+              ['DC palen (nodig / aanwezig / bijkomend)', `${Math.round(selectedResult.data.totDC)} / ${selectedResult.data.bestaand.DC.toFixed(1)} / ${selectedResult.data.delta.DC.toFixed(1)}`],
+              ['HPC palen (nodig / aanwezig / bijkomend)', `${Math.round(selectedResult.data.totHPC)} / ${selectedResult.data.bestaand.HPC.toFixed(1)} / ${selectedResult.data.delta.HPC.toFixed(1)}`],
               ['MWh/jr',   Math.round(selectedResult.data.totMwh)],
               ['CAPEX',    fmtEur(selectedResult.data.capex)],
             ].map(([l,v])=>(
