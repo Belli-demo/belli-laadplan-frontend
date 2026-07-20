@@ -573,7 +573,7 @@ export default function AppWithOnboarding() {
     g.addTo(mapInstance.current); existLayerRef.current = g;
   }, [existingPalen]);
 
-  const fmtEur = n => n>=1e6?`€${(n/1e6).toFixed(1)}M`:`€${Math.round(n/1000)}K`;
+  const fmtEur = n => `€${Math.round(n/1000).toLocaleString('nl-BE')}K`;
   const fmtN   = n => Math.round(n).toLocaleString('nl-NL');
   const selectedResult = selectedWijk ? wijkResults.find(r=>r.wijk.id===selectedWijk) : null;
 
