@@ -169,11 +169,13 @@ export default function AppWithOnboarding() {
     AC: s.AC + b.AC, DC: s.DC + b.DC, HPC: s.HPC + b.HPC,
   }), leegType());
 
-  // CAPEX per laadtype: LET OP, dit is de oude prijsstelling herverdeeld over
-  // de nieuwe AC/DC/HPC-indeling (AC = gemiddelde van de oude ac/acs-prijzen,
-  // DC en HPC ongewijzigd overgenomen). Dit is NIET met dezelfde bronnen
-  // getoetst als de rest van het rekenmodel (zie Leeswijzer), en moet nog
-  // apart gevalideerd worden.
+  // CAPEX per laadtype (per laadpunt/socket, niet per paal):
+  // - AC: gevalideerd door de gebruiker obv actuele marktprijzen (hardware,
+  //   netaansluiting, installatie), reële kost ca. €8.000/paal (2 laadpunten),
+  //   hier op €9.000/paal (€4.500/laadpunt) gehouden als bewuste marge voor
+  //   prijsinflatie de komende jaren.
+  // - DC en HPC: nog NIET apart gevalideerd, herverdeling van oudere,
+  //   ongecontroleerde prijsstelling (zie Leeswijzer), moet nog getoetst.
   const CAPEX_V2 = { AC: 4500, DC: 29000, HPC: 82000 };
 
   // ── Bereken wijken ─────────────────────────────────────────────────
@@ -192,7 +194,6 @@ export default function AppWithOnboarding() {
   const alleDeltas = wijkResults.map(r => r.data.deltaTotaal);
   const totLP       = wijkResults.reduce((s,r)=>s+r.data.totLP,0);
   const totMwh      = wijkResults.reduce((s,r)=>s+r.data.totMwh,0);
-  const totCapex    = wijkResults.reduce((s,r)=>s+r.data.capex,0);
   const totBestaand = wijkResults.reduce((s,r)=>s+r.data.bestaand.AC+r.data.bestaand.DC+r.data.bestaand.HPC,0);
   // Bijkomend (stadsbreed) = optelling van wat elke wijk zelf al, per type,
   // nooit-negatief aangeeft nodig te hebben (dezelfde .delta als hieronder
@@ -200,17 +201,25 @@ export default function AppWithOnboarding() {
   // netto-berekening (totLP - totBestaand), want dan kan een overschot in
   // de ene wijk een tekort in een andere wijk verbergen, terwijl bestaande
   // infrastructuur in wijk A een tekort in wijk B niet kan oplossen.
-  const bijkomendPerWijk = wijkResults.reduce((s,r)=>s+r.data.deltaTotaal,0);
-  const bijkomend = Math.max(0, bijkomendPerWijk - huidigLP);
+  // "Gepland te installeren" is specifiek AC (zie invoerveld), dus mag ook
+  // alleen het AC-deel van bijkomend/CAPEX verminderen, niet DC/HPC.
+  const totDeltaAC     = wijkResults.reduce((s,r)=>s+r.data.delta.AC,0);
+  const totDeltaOverig = wijkResults.reduce((s,r)=>s+r.data.delta.DC+r.data.delta.HPC,0);
+  const acNaGepland     = Math.max(0, totDeltaAC - huidigLP);
+  const geplandAangerekend = Math.min(huidigLP, totDeltaAC); // kan niet meer korten dan er AC-tekort is
+  const bijkomend = acNaGepland + totDeltaOverig;
   // CAPEX-tegel: rechtstreekse optelling van de bouwkost van precies het
   // bijkomende deel, per wijk en per laadtype (delta.AC/DC/HPC), niet een
   // ratio-schatting op basis van bruto-totalen. Die ratio-aanpak gaf een
   // sterk vertekend (te laag) beeld zodra bijkomend << totLP (bijvoorbeeld
   // omdat een deel van de stad al ruim voldoende infrastructuur heeft),
   // want dan schaalde hij de hele stadsbrede bouwkost mee naar beneden,
-  // ook voor wijken die wel degelijk een fors tekort hebben.
-  const capexBijkomend = wijkResults.reduce((s,r) =>
+  // ook voor wijken die wel degelijk een fors tekort hebben. De AC-kost van
+  // "gepland te installeren" wordt er hier ook echt vanaf getrokken, zodat
+  // deze tegel meebeweegt met de Bijkomend-tegel hierboven.
+  const capexBijkomendRuw = wijkResults.reduce((s,r) =>
     s + r.data.delta.AC*CAPEX_V2.AC + r.data.delta.DC*CAPEX_V2.DC + r.data.delta.HPC*CAPEX_V2.HPC, 0);
+  const capexBijkomend = Math.max(0, capexBijkomendRuw - geplandAangerekend*CAPEX_V2.AC);
 
   const tijdreeks = YEARS.map(yr => {
     const p = {...calcParams, year:yr, evAandeelOverride: gemeente?.evAandeelOverride?.[yr] ?? null};
@@ -222,13 +231,16 @@ export default function AppWithOnboarding() {
         DC:  Math.max(0, d.totDC  - bestaand.DC),
         HPC: Math.max(0, d.totHPC - bestaand.HPC),
       };
-      const capex = d.totAC*CAPEX_V2.AC + d.totDC*CAPEX_V2.DC + d.totHPC*CAPEX_V2.HPC;
+      const capex = delta.AC*CAPEX_V2.AC + delta.DC*CAPEX_V2.DC + delta.HPC*CAPEX_V2.HPC;
       return { ...d, bestaand, delta, deltaTotaal: delta.AC+delta.DC+delta.HPC, capex };
     });
     const totLPJaar      = res.reduce((s,r)=>s+r.totLP,0);
-    const bijkomendJaar = Math.max(0, res.reduce((s,r)=>s+r.deltaTotaal,0) - huidigLP);
-    const capexNu = res.reduce((s,r) =>
-      s + r.delta.AC*CAPEX_V2.AC + r.delta.DC*CAPEX_V2.DC + r.delta.HPC*CAPEX_V2.HPC, 0);
+    const totDeltaACJaar = res.reduce((s,r)=>s+r.delta.AC,0);
+    const totDeltaOverigJaar = res.reduce((s,r)=>s+r.delta.DC+r.delta.HPC,0);
+    const geplandAangerekendJaar = Math.min(huidigLP, totDeltaACJaar);
+    const bijkomendJaar = Math.max(0, totDeltaACJaar - huidigLP) + totDeltaOverigJaar;
+    const capexNuRuw = res.reduce((s,r) => s + r.capex, 0);
+    const capexNu = Math.max(0, capexNuRuw - geplandAangerekendJaar*CAPEX_V2.AC);
     return {
       jaar:yr,
       'Laadpunten nodig':  totLPJaar,
@@ -656,7 +668,7 @@ export default function AppWithOnboarding() {
                     return rijen.sort((a,b)=>b.lp-a.lp).map((r,i)=>(
                       <tr key={i} style={{borderBottom:`1px solid ${C.border}`,background:i%2===0?'#0a1620':C.panelBg}}>
                         <td style={{padding:'8px 14px',color:C.text,fontWeight:500}}>{r.naam}</td>
-                        <td style={{padding:'8px 14px',color:C.teal,fontWeight:700,textAlign:'right'}}>{r.lp}</td>
+                        <td style={{padding:'8px 14px',color:C.teal,fontWeight:700,textAlign:'right'}}>{Math.ceil(r.lp)}</td>
                         <td style={{padding:'8px 14px',color:C.textMid,textAlign:'right'}}>{r.mwh}</td>
                         <td style={{padding:'8px 14px',color:C.gold,textAlign:'right'}}>€ {Math.round(r.capex/1000)}K</td>
                         <td style={{padding:'8px 14px',textAlign:'center'}}>
@@ -788,7 +800,7 @@ export default function AppWithOnboarding() {
                 <input type="range" style={st.sl} min={0} max={30} step={1} value={Math.round(redundantieMarge*100)} onChange={e=>setRedundantieMarge(+e.target.value/100)}/>
               </div>
               <div>
-                <div style={st.lbl}><span>Gepland te installeren</span></div>
+                <div style={st.lbl}><span>Gepland te installeren (AC)</span></div>
                 <input
                   type="number"
                   min={0}
