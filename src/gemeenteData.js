@@ -132,25 +132,48 @@ export const REDUNDANTIE_MARGE = 0.10; // dekt ook "Paal volgt Wagen", zie Leesw
 
 export const YEARS = [2025, 2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033, 2034, 2035];
 
+// ── Werkgerelateerde (forensen) laadvraag op bedrijventerrein ──────────
+// Alleen relevant voor wijken met bedrijventerrein in hun wijktype; deze
+// vraag komt van werknemers die er niet wonen, dus wordt NIET door de
+// gewone bewoners/bezoekers/logistiek-doelgroepenmix gedekt (die is
+// gebaseerd op wijk.voertuigen, oftewel wie er woont).
+export const WERKNEMERS_PER_HA = 17.4; // Rebel-studie obv VLAIO/RSZ-data (West-Vlaanderen, 2015)
+export const FORENZEN_KM_PER_DAG = 37; // SD Worx 2025 (retour), bevestigd door MOBILO/UAntwerpen en BELDAM
+export const WERKDAGEN_PER_JAAR = 220;
+
 // ── Dekkingsnorm (ruimtelijke ondergrens) ───────────────────────────────
 // MOW: gemeenten zonder goedgekeurd strategisch laadplan zijn verplicht
 // "Paal volgt Wagen" met een norm van maximaal 250 meter tussen aanvrager
-// en laadpaal uit te voeren (VR-besluit, dec. 2025). Een strategisch
-// laadplan mag hiervan afwijken, maar dit is de baseline waar onze eigen,
-// planmatige aanpak zich minstens tegen zou moeten kunnen verantwoorden.
-// Vertaald naar een dekkingscirkel van de helft (125m straal) per laadpunt.
+// en laadpaal uit te voeren (VR-besluit, dec. 2025). De norm gaat over de
+// afstand tussen PALEN, niet tussen individuele laadpunten (sockets); een
+// paal heeft doorgaans 2 laadpunten. Dit is een baseline-referentie, GEEN
+// vervanging van de energiegebaseerde berekening: een strategisch laadplan
+// bestaat juist om actief, obv reële vraag, locaties en aantallen te
+// bepalen, niet om deze theoretische spreidingsnorm blind te volgen. Zie
+// calcWijk: dekkingAC beïnvloedt totAC/totLP/delta niet, het is een puur
+// informatief vergelijkingscijfer.
 export const DEKKING_AFSTAND_M = 250;
 const DEKKING_STRAAL_KM = (DEKKING_AFSTAND_M / 2) / 1000;
-const DEKKING_OPPERVLAK_PER_LP_KM2 = Math.PI * DEKKING_STRAAL_KM * DEKKING_STRAAL_KM;
+const DEKKING_OPPERVLAK_PER_PAAL_KM2 = Math.PI * DEKKING_STRAAL_KM * DEKKING_STRAAL_KM;
+const LAADPUNTEN_PER_PAAL = 2;
 
 /**
- * Minimaal aantal laadpunten voor ruimtelijke dekking van een wijk,
- * los van de energiebehoefte (MOW's 250m-norm als baseline).
+ * Minimaal aantal PALEN voor ruimtelijke dekking van een wijk (250m-norm),
+ * los van de energiebehoefte.
+ * @param {number} oppervlakteKm2
+ */
+export function dekkingPalen(oppervlakteKm2) {
+  if (!oppervlakteKm2) return 0;
+  return oppervlakteKm2 / DEKKING_OPPERVLAK_PER_PAAL_KM2;
+}
+
+/**
+ * Dekkingsnorm uitgedrukt in laadpunten (2 per paal), zodat hij vergelijkbaar
+ * is met de energiegebaseerde laadpunten-uitkomst. Puur ter referentie.
  * @param {number} oppervlakteKm2
  */
 export function dekkingLaadpunten(oppervlakteKm2) {
-  if (!oppervlakteKm2) return 0;
-  return oppervlakteKm2 / DEKKING_OPPERVLAK_PER_LP_KM2;
+  return dekkingPalen(oppervlakteKm2) * LAADPUNTEN_PER_PAAL;
 }
 
 // ── Stap 1: EV-aandeel ─────────────────────────────────────────────────
@@ -237,9 +260,26 @@ export function calcWijk(wijk, params) {
   const mwhLog = mwhPubliek * mix.log * rest;
   const mwhOv  = mwhPubliek * ov;
 
-  const mwhAC  = mwhBew * DOELGROEP_LAADTYPE.bew.ac  + mwhBez * DOELGROEP_LAADTYPE.bez.ac  + mwhLog * DOELGROEP_LAADTYPE.log.ac  + mwhOv * DOELGROEP_LAADTYPE.ov.ac;
-  const mwhDC  = mwhBew * DOELGROEP_LAADTYPE.bew.dc  + mwhBez * DOELGROEP_LAADTYPE.bez.dc  + mwhLog * DOELGROEP_LAADTYPE.log.dc  + mwhOv * DOELGROEP_LAADTYPE.ov.dc;
-  const mwhHPC = mwhBew * DOELGROEP_LAADTYPE.bew.hpc + mwhBez * DOELGROEP_LAADTYPE.bez.hpc + mwhLog * DOELGROEP_LAADTYPE.log.hpc + mwhOv * DOELGROEP_LAADTYPE.ov.hpc;
+  // Werkgerelateerde (forensen) vraag, alleen voor bedrijventerrein-wijken.
+  // Optie 2 (bewust gekozen i.p.v. optie 1): alleen het deel dat NIET privé/
+  // semi-publiek door de werkgever wordt opgelost telt mee als publieke
+  // vraag, met dezelfde privé%-verhouding als de rest van het model. Qua
+  // laadtype behandeld als "bewoners" (lang, rustig parkeren tijdens een
+  // volledige werkdag lijkt qua patroon meer op overnachten dan op kort
+  // winkelbezoek), dus overwegend AC.
+  const werkgerelateerdRelevant = types.includes('bedrijventerrein');
+  let mwhWerk = 0;
+  if (werkgerelateerdRelevant && wijk.oppervlakteKm2) {
+    const werknemers = wijk.oppervlakteKm2 * 100 * WERKNEMERS_PER_HA;
+    const werknemersEvs = werknemers * evPct;
+    const kwhPerWerknemerJaar = FORENZEN_KM_PER_DAG * WERKDAGEN_PER_JAAR * VERBRUIK_PER_KM;
+    const mwhWerkBruto = werknemersEvs * kwhPerWerknemerJaar / 1000;
+    mwhWerk = mwhWerkBruto * (1 - gebruiktPrivePct); // optie 2: alleen niet-privé-opgeloste deel
+  }
+
+  const mwhAC  = mwhBew * DOELGROEP_LAADTYPE.bew.ac  + mwhBez * DOELGROEP_LAADTYPE.bez.ac  + mwhLog * DOELGROEP_LAADTYPE.log.ac  + mwhOv * DOELGROEP_LAADTYPE.ov.ac  + mwhWerk * DOELGROEP_LAADTYPE.bew.ac;
+  const mwhDC  = mwhBew * DOELGROEP_LAADTYPE.bew.dc  + mwhBez * DOELGROEP_LAADTYPE.bez.dc  + mwhLog * DOELGROEP_LAADTYPE.log.dc  + mwhOv * DOELGROEP_LAADTYPE.ov.dc  + mwhWerk * DOELGROEP_LAADTYPE.bew.dc;
+  const mwhHPC = mwhBew * DOELGROEP_LAADTYPE.bew.hpc + mwhBez * DOELGROEP_LAADTYPE.bez.hpc + mwhLog * DOELGROEP_LAADTYPE.log.hpc + mwhOv * DOELGROEP_LAADTYPE.ov.hpc + mwhWerk * DOELGROEP_LAADTYPE.bew.hpc;
 
   // Stap 4: utilisatie per laadpunt -> bruto aantal, met redundantiemarge
   const acPerJaar  = acUtilisatieMwhMaand(year)  * 12;
@@ -250,22 +290,26 @@ export function calcWijk(wijk, params) {
   const totDC  = (mwhDC  / dcPerJaar)  * (1 + redundantieMarge);
   const totHPC = (mwhHPC / hpcPerJaar) * (1 + redundantieMarge);
 
-  // Ruimtelijke dekkingsondergrens (MOW 250m-norm), alleen relevant voor AC
-  // (DC/HPC zijn geen "op loopafstand"-voorzieningen zoals normaal laden).
-  // De 250m-dekkingsnorm komt uit "Paal volgt Wagen", specifiek bedoeld voor
-  // bewoners zonder oprit die dicht bij huis willen laden. Die norm is niet
-  // van toepassing op een zuiver bedrijventerrein (geen bewoners, geen
-  // "dicht bij huis"-behoefte), dus telt daar niet mee als ondergrens.
+  // Ruimtelijke dekkingsnorm (MOW 250m-norm, "Paal volgt Wagen"), alleen
+  // relevant voor AC en alleen zinvol bij woonwijk/binnenstad (geen
+  // bewoners-"dicht bij huis"-behoefte op een zuiver bedrijventerrein).
+  // LET OP: dit is bewust een REFERENTIECIJFER, geen ondergrens die de
+  // uitkomst overschrijft. Een strategisch laadplan bestaat juist om obv
+  // reële energievraag actief te bepalen waar en hoeveel palen nodig zijn;
+  // de 250m-regel is de blinde, theoretische baseline die geldt bij het
+  // ONTBREKEN van zo'n plan, niet iets waar de uitkomst van dit model
+  // zelf aan ondergeschikt zou moeten zijn. totAC blijft daarom altijd
+  // energiegebaseerd; dekkingAC wordt niet in totLP/delta/bijkomend
+  // meegenomen, alleen getoond ter vergelijking.
   const dekkingRelevant = types.some(t => t === 'woonwijk' || t === 'binnenstad');
   const dekkingAC = dekkingRelevant ? dekkingLaadpunten(wijk.oppervlakteKm2) : 0;
-  const totACGehanteerd = Math.max(totAC, dekkingAC);
-  const dekkingBepalend = dekkingAC > totAC;
+  const dekkingLigtHoger = dekkingAC > totAC;
 
   return {
     evs, evPct, privePct: gebruiktPrivePct,
-    totMwh, mwhPubliek, mwhAC, mwhDC, mwhHPC,
-    totAC: totACGehanteerd, totACEnergie: totAC, dekkingAC, dekkingBepalend,
+    totMwh: totMwh + mwhWerk, mwhPubliek: mwhPubliek + mwhWerk, mwhWerk, mwhAC, mwhDC, mwhHPC,
+    totAC, totACEnergie: totAC, dekkingAC, dekkingLigtHoger,
     totDC, totHPC,
-    totLP: totACGehanteerd + totDC + totHPC,
+    totLP: totAC + totDC + totHPC,
   };
 }
