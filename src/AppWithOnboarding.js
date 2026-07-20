@@ -185,7 +185,7 @@ export default function AppWithOnboarding() {
       DC:  Math.max(0, data.totDC  - bestaand.DC),
       HPC: Math.max(0, data.totHPC - bestaand.HPC),
     };
-    const capex = data.totAC*CAPEX_V2.AC + data.totDC*CAPEX_V2.DC + data.totHPC*CAPEX_V2.HPC;
+    const capex = delta.AC*CAPEX_V2.AC + delta.DC*CAPEX_V2.DC + delta.HPC*CAPEX_V2.HPC;
     return { wijk:w, data:{ ...data, bestaand, delta, capex,
       deltaTotaal: delta.AC + delta.DC + delta.HPC } };
   });
@@ -202,11 +202,15 @@ export default function AppWithOnboarding() {
   // infrastructuur in wijk A een tekort in wijk B niet kan oplossen.
   const bijkomendPerWijk = wijkResults.reduce((s,r)=>s+r.data.deltaTotaal,0);
   const bijkomend = Math.max(0, bijkomendPerWijk - huidigLP);
-  // CAPEX-tegel: bruto bouwkost stadsbreed, verhoudingsgewijs verminderd met
-  // dezelfde stadsbrede bijkomend/totLP-ratio (grove schatting, geen exacte
-  // kost per laadpaaltype omdat we niet weten welk type paal al bestaat of
-  // gepland is).
-  const capexBijkomend = totLP > 0 ? totCapex * (bijkomend / totLP) : 0;
+  // CAPEX-tegel: rechtstreekse optelling van de bouwkost van precies het
+  // bijkomende deel, per wijk en per laadtype (delta.AC/DC/HPC), niet een
+  // ratio-schatting op basis van bruto-totalen. Die ratio-aanpak gaf een
+  // sterk vertekend (te laag) beeld zodra bijkomend << totLP (bijvoorbeeld
+  // omdat een deel van de stad al ruim voldoende infrastructuur heeft),
+  // want dan schaalde hij de hele stadsbrede bouwkost mee naar beneden,
+  // ook voor wijken die wel degelijk een fors tekort hebben.
+  const capexBijkomend = wijkResults.reduce((s,r) =>
+    s + r.data.delta.AC*CAPEX_V2.AC + r.data.delta.DC*CAPEX_V2.DC + r.data.delta.HPC*CAPEX_V2.HPC, 0);
 
   const tijdreeks = YEARS.map(yr => {
     const p = {...calcParams, year:yr, evAandeelOverride: gemeente?.evAandeelOverride?.[yr] ?? null};
@@ -222,9 +226,9 @@ export default function AppWithOnboarding() {
       return { ...d, bestaand, delta, deltaTotaal: delta.AC+delta.DC+delta.HPC, capex };
     });
     const totLPJaar      = res.reduce((s,r)=>s+r.totLP,0);
-    const totCapexJaar    = res.reduce((s,r)=>s+r.capex,0);
     const bijkomendJaar = Math.max(0, res.reduce((s,r)=>s+r.deltaTotaal,0) - huidigLP);
-    const capexNu = totLPJaar > 0 ? totCapexJaar * (bijkomendJaar / totLPJaar) : 0;
+    const capexNu = res.reduce((s,r) =>
+      s + r.delta.AC*CAPEX_V2.AC + r.delta.DC*CAPEX_V2.DC + r.delta.HPC*CAPEX_V2.HPC, 0);
     return {
       jaar:yr,
       'Laadpunten nodig':  totLPJaar,
@@ -886,7 +890,7 @@ export default function AppWithOnboarding() {
               ['DC palen (nodig / aanwezig / bijkomend)', `${Math.round(selectedResult.data.totDC)} / ${selectedResult.data.bestaand.DC.toFixed(1)} / ${selectedResult.data.delta.DC.toFixed(1)}`],
               ['HPC palen (nodig / aanwezig / bijkomend)', `${Math.round(selectedResult.data.totHPC)} / ${selectedResult.data.bestaand.HPC.toFixed(1)} / ${selectedResult.data.delta.HPC.toFixed(1)}`],
               ['MWh/jr',   Math.round(selectedResult.data.totMwh)],
-              ['CAPEX',    fmtEur(selectedResult.data.capex)],
+              ['CAPEX bijkomend', fmtEur(selectedResult.data.capex)],
             ].map(([l,v])=>(
               <div key={l} style={st.dpR}>
                 <span style={{color:C.textMid}}>{l}</span>
