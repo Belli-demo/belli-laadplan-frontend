@@ -735,7 +735,7 @@ export default function AppWithOnboarding() {
             <div style={st.sHdr}>Gemeente</div>
             <div style={st.sBody}>
               <div style={st.gemWrap}>
-                {Object.values(gemeenten).filter(g => g.id !== 'olen').map(g => (
+                {Object.values(gemeenten).map(g => (
                   <div key={g.id} style={st.gemBtn(gemId===g.id, g.kleur||C.tealDark)}
                     onClick={() => setGemId(g.id)}>{g.naam}</div>
                 ))}
