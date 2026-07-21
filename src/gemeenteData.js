@@ -135,6 +135,34 @@ export const REDUNDANTIE_MARGE = 0.10; // dekt ook "Paal volgt Wagen", zie Leesw
 
 export const YEARS = [2025, 2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033, 2034, 2035];
 
+// ── Slim laden (E-Laad studie) ──────────────────────────────────────────
+// Twee aparte, gebronneerde effecten, GEEN generieke verlaging van de
+// energiebehoefte (dat was de eerdere, foute aanname):
+// 1) Een kleine, licht NEGATIEVE energiecorrectie per sessie (kort geparkeerde
+//    sessies lopen de verlaagde piekurensnelheid niet altijd meer in).
+// 2) Meer connectiepunten passen op dezelfde netaansluiting, omdat de
+//    piekbelasting daalt. Dit vergroot NIET de maximaal leverbare kWh van
+//    die aansluiting, alleen het aantal sockets dat zich die vaste
+//    hoeveelheid vermogen kan delen.
+export const SLIM_LADEN_ENERGIE_CORRECTIE = 0.035; // E-Laad studie: 2-5% minder energie/sessie
+export const SLIM_LADEN_PIEKREDUCTIE = 0.40;       // E-Laad studie: 35-49% piekreductie, hier 40% aangehouden
+const AANSLUITING_KW = Math.sqrt(3) * 400 * 32 / 1000; // 3x32A, 400V => 22,17 kW
+const PALEN_PER_AANSLUITING_BASELINE = AANSLUITING_KW / 11; // ~2,02, komt overeen met een duo-paal
+
+/**
+ * Extra AC-laadpunten die op dezelfde, bestaande netaansluitingen passen
+ * dankzij slim laden, TOEGEPAST OP DE BESTAANDE INFRASTRUCTUUR, niet op de
+ * berekende behoefte. Puur een netcapaciteits-inzicht, geen vervanging van
+ * de energiegebaseerde berekening.
+ * @param {number} bestaandAC - bestaand, gewogen aantal AC-laadpunten
+ */
+export function slimLadenExtraRuimte(bestaandAC) {
+  if (!bestaandAC) return 0;
+  const factor = 1 / (1 - SLIM_LADEN_PIEKREDUCTIE);
+  const extraPerAansluiting = factor - 1; // hoeveel MEER er per aansluiting bij kan
+  return bestaandAC * (extraPerAansluiting / PALEN_PER_AANSLUITING_BASELINE);
+}
+
 // ── Werkgerelateerde (forensen) laadvraag op bedrijventerrein ──────────
 // Alleen relevant voor wijken met bedrijventerrein in hun wijktype; deze
 // vraag komt van werknemers die er niet wonen, dus wordt NIET door de
@@ -236,6 +264,7 @@ export function calcWijk(wijk, params) {
     privePctOverride = null,
     redundantieMarge = REDUNDANTIE_MARGE,
     trendFactor = 1,
+    slimLaden = false,
   } = params;
 
   // Stap 1: energiebehoefte
@@ -285,7 +314,11 @@ export function calcWijk(wijk, params) {
   const mwhHPC = mwhBew * DOELGROEP_LAADTYPE.bew.hpc + mwhBez * DOELGROEP_LAADTYPE.bez.hpc + mwhLog * DOELGROEP_LAADTYPE.log.hpc + mwhOv * DOELGROEP_LAADTYPE.ov.hpc + mwhWerk * DOELGROEP_LAADTYPE.bew.hpc;
 
   // Stap 4: utilisatie per laadpunt -> bruto aantal, met redundantiemarge
-  const acPerJaar  = acUtilisatieMwhMaand(year)  * 12;
+  // Bij slim laden: kleine, gebronneerde correctie (E-Laad studie), een
+  // paal levert netto iets minder energie per sessie, dus is er iets MEER
+  // capaciteit nodig voor dezelfde behoefte, niet minder.
+  const acCorrectie = slimLaden ? (1 - SLIM_LADEN_ENERGIE_CORRECTIE) : 1;
+  const acPerJaar  = acUtilisatieMwhMaand(year)  * 12 * acCorrectie;
   const dcPerJaar  = dcUtilisatieMwhMaand(year)  * 12;
   const hpcPerJaar = hpcUtilisatieMwhMaand(year) * 12;
 
