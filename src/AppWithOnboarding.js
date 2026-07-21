@@ -828,10 +828,8 @@ export default function AppWithOnboarding() {
                   </div>
                 </div>
               ))}
-              {Object.values(trends).some(Boolean)&&(
-                <div style={{fontSize:10,color:C.gold,fontWeight:700}}>
-                  Gecombineerd: –{Math.round((1-trendFactor)*100)}%
-                </div>
+              {trends.slim && (
+                <div style={{fontSize:10,color:C.textDim}}>Ruimte voor extra laadpunten, obv 40% piekreductie (E-Laad studie).</div>
               )}
             </div>
           </div>
