@@ -61,6 +61,10 @@ export default function GemeenteEditor({ gemeente, onSave, onClose }) {
     try {
       const r = await verversBevolkingscijfers();
       setBevolkingResultaat(r);
+      try {
+        const eigen = await getBevolking(naam);
+        if (eigen?.inwoners) setInwoners(String(eigen.inwoners));
+      } catch { /* geen cijfer voor deze naam gevonden, laat het huidige veld ongewijzigd */ }
     } catch(e) {
       setBevolkingError(e.message);
     }
@@ -171,19 +175,7 @@ export default function GemeenteEditor({ gemeente, onSave, onClose }) {
                   <div style={{ ...s.hint, marginTop:8, fontSize:11, lineHeight:1.7 }}>
                     {bevolkingResultaat.bijgewerkt.toLocaleString('nl-BE')} gemeenten landelijk bijgewerkt vanuit het Rijksregister,
                     waarvan {bevolkingResultaat.gemeentenBijgewerkt.toLocaleString('nl-BE')} al onboarde gemeenten in de database
-                    meteen mee geactualiseerd (inclusief {gemeente.naam}, als die is meeveranderd).
-                    <br/>
-                    Dit open formulier zelf ververst niet vanzelf, klik hieronder om het net bijgewerkte cijfer ook hier te tonen:
-                    <br/>
-                    <span style={{ cursor:'pointer', textDecoration:'underline', color:C.tealDark }}
-                      onClick={async () => {
-                        try {
-                          const r = await getBevolking(naam);
-                          if (r?.inwoners) setInwoners(String(r.inwoners));
-                        } catch { setBevolkingError(`Geen cijfer gevonden voor "${naam}" in de zojuist ververste tabel.`); }
-                      }}>
-                      cijfer voor {naam} in dit formulier tonen
-                    </span>
+                    meteen mee geactualiseerd. Het inwonersveld hierboven toont automatisch het nieuwste cijfer voor {gemeente.naam}.
                   </div>
                 )}
               </div>
