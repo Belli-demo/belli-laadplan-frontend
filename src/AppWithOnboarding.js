@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { GEMEENTEN as FALLBACK_GEMEENTEN, calcWijk, YEARS } from './gemeenteData';
+import { GEMEENTEN as FALLBACK_GEMEENTEN, calcWijk, YEARS, slimLadenExtraRuimte } from './gemeenteData';
 import GemeenteOnboarding from './components/GemeenteOnboarding';
 import GemeenteEditor from './components/GemeenteEditor';
 import { getAlleGemeenten, getGemeente, slaGemeenteOp, verwijderGemeente, checkHealth, onboardGemeenteGeo, getSectoren, syncWijkenVanStatbel, getLaadpalen } from './api';
@@ -116,14 +116,13 @@ export default function AppWithOnboarding() {
   const gemeente = gemeenten[gemId] || Object.values(gemeenten)[0];
 
   // ── Trendcorrectie ─────────────────────────────────────────────────
-  const trendFactor = (() => {
-    let f = 1.0;
-    if (trends.carshare) f *= 1 - 0.18 * Math.min(1,(year-2025)/10);
-    if (trends.v2g)      f *= 1 - 0.28 * Math.min(1,(year-2025)/10);
-    if (trends.pv)       f *= 1 - 0.20 * Math.min(1,(year-2025)/10);
-    if (trends.slim)     f *= 1 - 0.12 * Math.min(1,(year-2025)/10);
-    return f;
-  })();
+  // Car sharing, V2G en Energiedelen PV hebben nog geen onderbouwd effect
+  // (zie Leeswijzer/Validatie Overzicht) en staan daarom nog zonder effect
+  // op de berekening, in plaats van met een verzonnen percentage. Slim
+  // laden heeft een eigen, gebronneerd mechanisme (zie calcWijk in
+  // gemeenteData.js: kleine energiecorrectie + aparte "ruimte voor extra
+  // laadpunten"-metric), en loopt dus niet meer via deze generieke factor.
+  const trendFactor = 1.0;
 
   // calcParams: privePctOverride blijft de vroegere "% publiek laden"-schuifknop,
   // nu als bewuste override op het berekende privePctBerekend van de gemeente
@@ -136,6 +135,7 @@ export default function AppWithOnboarding() {
     privePctOverride: privePctOverride,
     redundantieMarge,
     trendFactor,
+    slimLaden: trends.slim,
   };
 
   // ── Bestaande laadpunten toewijzen aan dichtstbijzijnde wijk ────────
@@ -502,7 +502,7 @@ export default function AppWithOnboarding() {
     // Voeg lagen toe aan kaart
     wg.addTo(mapInstance.current);
     wijkLayerRef.current = wg;
-  }, [gemId, year, privePctOverride, redundantieMarge, trendFactor, gemeenten, sectorenGeladen, existingPalen]);
+  }, [gemId, year, privePctOverride, redundantieMarge, trendFactor, trends, gemeenten, sectorenGeladen, existingPalen]);
 
   // ── Bestaande palen laag ───────────────────────────────────────────
   useEffect(() => {
@@ -820,7 +820,7 @@ export default function AppWithOnboarding() {
           <div style={st.sec}>
             <div style={st.sHdr}>Trendscenario's</div>
             <div style={st.sBody}>
-              {[['carshare','Car sharing'],['v2g','V2G bidirectioneel'],['pv','Energiedelen PV'],['slim','Slim laden']].map(([t,l])=>(
+              {[['slim','Slim laden']].map(([t,l])=>(
                 <div key={t} style={st.tR}>
                   <span style={{fontSize:11,color:C.textMid}}>{l}</span>
                   <div style={st.tog(trends[t])} onClick={()=>setTrends(s=>({...s,[t]:!s[t]}))}>
@@ -899,6 +899,10 @@ export default function AppWithOnboarding() {
               ['Referentie: 250m-norm zou geven',   `${Math.round(selectedResult.data.dekkingAC)}${selectedResult.data.dekkingLigtHoger ? ' (hoger dan energiebehoefte)' : ''}`],
               ['AC al aanwezig',           selectedResult.data.bestaand.AC.toFixed(1)],
               ['AC nog te plaatsen',       selectedResult.data.delta.AC.toFixed(1)],
+              ...(trends.slim ? [[
+                'Ruimte op bestaande aansluitingen (slim laden, E-Laad studie)',
+                `+${Math.round(slimLadenExtraRuimte(selectedResult.data.bestaand.AC))} extra AC-sockets mogelijk, zelfde max. leverbare kWh`,
+              ]] : []),
               ['DC palen (nodig / aanwezig / bijkomend)', `${Math.round(selectedResult.data.totDC)} / ${selectedResult.data.bestaand.DC.toFixed(1)} / ${selectedResult.data.delta.DC.toFixed(1)}`],
               ['HPC palen (nodig / aanwezig / bijkomend)', `${Math.round(selectedResult.data.totHPC)} / ${selectedResult.data.bestaand.HPC.toFixed(1)} / ${selectedResult.data.delta.HPC.toFixed(1)}`],
               ['MWh/jr',   Math.round(selectedResult.data.totMwh)],
