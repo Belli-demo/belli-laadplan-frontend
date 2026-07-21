@@ -167,7 +167,7 @@ export default function GemeenteEditor({ gemeente, onSave, onClose }) {
 
               <div style={s.row}>
                 <button style={s.btn(false)} onClick={verversVanuitFluvius} disabled={fluviusLoading || !postcodes.trim()}>
-                  {fluviusLoading ? 'Bezig…' : '⟳ Ververs privé % vanuit Fluvius'}
+                  {fluviusLoading ? 'Bezig…' : '⟳ Haal actuele private laadpunten op (Fluvius)'}
                 </button>
                 {fluviusError && <div style={s.error}>⚠ {fluviusError}</div>}
                 {fluviusResultaat && (
@@ -177,12 +177,14 @@ export default function GemeenteEditor({ gemeente, onSave, onClose }) {
                     tegenover ~{Math.round(fluviusResultaat.huidigeEvs).toLocaleString('nl-BE')} geschatte EV's nu ({HUIDIG_JAAR}).
                     {fluviusResultaat.voorgesteld != null && (
                       <>
-                        <br/>Voorgesteld privé %: <strong style={{ color:C.teal }}>{Math.round(fluviusResultaat.voorgesteld*100)}%</strong>
-                        {' '}
-                        <span style={{ cursor:'pointer', textDecoration:'underline', color:C.tealDark }}
-                          onClick={() => setPrivePctBerekend(Math.round(fluviusResultaat.voorgesteld*100))}>
-                          overnemen
-                        </span>
+                        <br/>Daadwerkelijke installatiegraad nu: <strong style={{ color:C.teal }}>{Math.round(fluviusResultaat.voorgesteld*100)}%</strong>
+                        {' '}({HUIDIG_JAAR}, geen 2030-prognose)
+                        <div style={{ color:C.gold, marginTop:4 }}>
+                          Let op: dit meet iets anders dan het privé%-veld hierboven (garage/oprit-mogelijkheid volgens de
+                          Stadsmonitor) en is bovendien een momentopname van {HUIDIG_JAAR}, geen projectie voor 2030. Niet
+                          zonder nadenken overnemen: beoordeel eerst of, en hoe, dit percentage naar 2030 zou moeten
+                          bewegen, voordat je het privé%-veld hierboven handmatig aanpast.
+                        </div>
                       </>
                     )}
                     {fluviusResultaat.mislukt?.length > 0 && (
