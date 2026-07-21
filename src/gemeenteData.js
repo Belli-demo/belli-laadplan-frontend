@@ -16,6 +16,7 @@ export const GEMEENTEN = {
     inwoners: 104906,
     voertuigen: 48200,
     oppervlakteKm2: 56.63, // extern geverifieerd (Stad Leuven, officiële opgave)
+    postcodes: ['3000','3001','3010','3012','3018'], // extern geverifieerd (bpost)
     welvaartsindex: 115, // TODO bij onboarding: exact Statbel-cijfer opzoeken, dit is een schatting
     privePctBerekend: 0.636, // extern geverifieerd: eigen straatniveau-dataset (1.077 straten)
     evAandeelOverride: { 2030: 0.376, 2035: 0.595 }, // afgeleid uit dezelfde straatniveau-dataset
@@ -41,7 +42,8 @@ export const GEMEENTEN = {
     inwoners: 14000,
     voertuigen: 8200,
     oppervlakteKm2: 23.10, // extern geverifieerd (Wikipedia/officiële opgave)
-    welvaartsindex: 92, // schatting, nog te verifiëren bij Statbel
+    postcodes: ['2250'], // extern geverifieerd (Wikipedia)
+    welvaartsindex: 107, // extern geverifieerd (gemeente Olen zelf)
     privePctBerekend: 0.70, // schatting, nog te verifiëren (Stadsmonitor)
     center: [51.1400, 4.8600],
     zoom: 13,
@@ -61,6 +63,7 @@ export const GEMEENTEN = {
     inwoners: 268000,
     voertuigen: 112000,
     oppervlakteKm2: 156.18, // extern geverifieerd (Wikipedia/officiële opgave)
+    postcodes: ['9000','9030','9031','9032','9040','9050','9051','9052'], // beste inschatting, mogelijk niet volledig
     welvaartsindex: 98, // schatting, nog te verifiëren bij Statbel
     privePctBerekend: 0.60, // schatting, nog te verifiëren (Stadsmonitor)
     center: [51.0543, 3.7174],

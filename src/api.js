@@ -13,6 +13,7 @@ async function apiFetch(path, options = {}) {
 
 export async function getAlleGemeenten() { return apiFetch('/gemeenten'); }
 export async function getGemeente(id)    { return apiFetch(`/gemeenten/${id}`); }
+export async function getFluviusPrive(id) { return apiFetch(`/geo/fluvius-prive/${id}`); }
 export async function slaGemeenteOp(g)  { return apiFetch('/gemeenten', { method:'POST', body:JSON.stringify(g) }); }
 export async function updateGemeente(id, data) { return apiFetch(`/gemeenten/${id}`, { method:'PUT', body:JSON.stringify(data) }); }
 export async function verwijderGemeente(id) { return apiFetch(`/gemeenten/${id}`, { method:'DELETE' }); }
