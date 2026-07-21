@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { updateGemeente } from '../api';
+import { updateGemeente, getFluviusPrive } from '../api';
+import { evAandeelGemeente } from '../gemeenteData';
 
 const C = {
   panelBg:'#122028', border:'#1e3a46', teal:'#9EC5CB',
@@ -24,12 +25,32 @@ export default function GemeenteEditor({ gemeente, onSave, onClose }) {
   const [privePctBerekend, setPrivePctBerekend] = useState(Math.round((gemeente.privePctBerekend ?? 0.5) * 100));
   const [evOverride2030, setEvOverride2030] = useState(gemeente.evAandeelOverride?.[2030] != null ? Math.round(gemeente.evAandeelOverride[2030]*1000)/10 : '');
   const [evOverride2035, setEvOverride2035] = useState(gemeente.evAandeelOverride?.[2035] != null ? Math.round(gemeente.evAandeelOverride[2035]*1000)/10 : '');
+  const [postcodes, setPostcodes] = useState((gemeente.postcodes || []).join(', '));
+  const [fluviusLoading, setFluviusLoading] = useState(false);
+  const [fluviusResultaat, setFluviusResultaat] = useState(null);
+  const [fluviusError, setFluviusError] = useState('');
   const [wijken,     setWijken]     = useState(
     (gemeente.wijken || []).map(w => ({ ...w, wijktype: w.wijktype || ['woonwijk'], ovAandeel: w.ovAandeel ?? 0 }))
   );
   const [saving,     setSaving]     = useState(false);
   const [error,      setError]      = useState('');
   const [activeTab,  setActiveTab]  = useState('gemeente');
+
+  const HUIDIG_JAAR = 2026; // Fluvius-registraties zijn een momentopname van nu, geen toekomstprognose
+
+  const verversVanuitFluvius = async () => {
+    setFluviusLoading(true); setFluviusError(''); setFluviusResultaat(null);
+    try {
+      const r = await getFluviusPrive(gemeente.id);
+      const evPct = evAandeelGemeente(HUIDIG_JAAR, parseFloat(welvaartsindex) || 106.9);
+      const huidigeEvs = (parseInt(voertuigen) || 0) * evPct;
+      const voorgesteld = huidigeEvs > 0 ? Math.min(1, r.totaalPrivePunten / huidigeEvs) : null;
+      setFluviusResultaat({ ...r, huidigeEvs, voorgesteld });
+    } catch(e) {
+      setFluviusError(e.message);
+    }
+    setFluviusLoading(false);
+  };
 
   const updateWijk = (idx, field, val) =>
     setWijken(ws => ws.map((w, i) => i === idx ? { ...w, [field]: val } : w));
@@ -55,6 +76,7 @@ export default function GemeenteEditor({ gemeente, onSave, onClose }) {
         welvaartsindex: parseFloat(welvaartsindex),
         privePctBerekend: parseFloat(privePctBerekend) / 100,
         evAandeelOverride: Object.keys(evAandeelOverride).length ? evAandeelOverride : undefined,
+        postcodes: postcodes.split(',').map(p => p.trim()).filter(Boolean),
         wijken,
       };
       await updateGemeente(gemeente.id, bijgewerkt);
@@ -136,6 +158,38 @@ export default function GemeenteEditor({ gemeente, onSave, onClose }) {
                   <input style={s.input} type="number" min="0" max="100" value={privePctBerekend} onChange={e => setPrivePctBerekend(e.target.value)} />
                   <div style={s.hint}>Stadsmonitor "private buitenruimte", of eigen straatdataset indien beschikbaar.</div>
                 </div>
+              </div>
+
+              <div style={s.row}>
+                <label style={s.label}>Postcodes (komma-gescheiden, nodig voor de Fluvius-koppeling)</label>
+                <input style={s.input} value={postcodes} onChange={e => setPostcodes(e.target.value)} placeholder="bijv. 3000, 3001, 3010" />
+              </div>
+
+              <div style={s.row}>
+                <button style={s.btn(false)} onClick={verversVanuitFluvius} disabled={fluviusLoading || !postcodes.trim()}>
+                  {fluviusLoading ? 'Bezig…' : '⟳ Ververs privé % vanuit Fluvius'}
+                </button>
+                {fluviusError && <div style={s.error}>⚠ {fluviusError}</div>}
+                {fluviusResultaat && (
+                  <div style={{ ...s.hint, marginTop:8, fontSize:11, lineHeight:1.7 }}>
+                    {fluviusResultaat.totaalPrivePunten.toLocaleString('nl-BE')} geregistreerde private laadpunten
+                    (Fluvius, {Object.keys(fluviusResultaat.perPostcode).length} van {fluviusResultaat.postcodes.length} postcodes bereikt)
+                    tegenover ~{Math.round(fluviusResultaat.huidigeEvs).toLocaleString('nl-BE')} geschatte EV's nu ({HUIDIG_JAAR}).
+                    {fluviusResultaat.voorgesteld != null && (
+                      <>
+                        <br/>Voorgesteld privé %: <strong style={{ color:C.teal }}>{Math.round(fluviusResultaat.voorgesteld*100)}%</strong>
+                        {' '}
+                        <span style={{ cursor:'pointer', textDecoration:'underline', color:C.tealDark }}
+                          onClick={() => setPrivePctBerekend(Math.round(fluviusResultaat.voorgesteld*100))}>
+                          overnemen
+                        </span>
+                      </>
+                    )}
+                    {fluviusResultaat.mislukt?.length > 0 && (
+                      <div style={{ color:C.warn }}>Niet bereikbaar: {fluviusResultaat.mislukt.join(', ')}</div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div style={s.row}>
