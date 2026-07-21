@@ -804,7 +804,8 @@ export default function AppWithOnboarding() {
                 <input
                   type="number"
                   min={0}
-                  value={huidigLP}
+                  value={huidigLP === 0 ? '' : huidigLP}
+                  placeholder="0"
                   onChange={e => setHuidigLP(e.target.value === '' ? 0 : Math.max(0, +e.target.value))}
                   style={{
                     width:'100%', boxSizing:'border-box', padding:'6px 10px',

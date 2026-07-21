@@ -13,7 +13,7 @@ export const GEMEENTEN = {
     id: 'leuven',
     naam: 'Leuven',
     provincie: 'Vlaams-Brabant',
-    inwoners: 104906,
+    inwoners: 105233, // extern geverifieerd (Rijksregister, 1 januari 2026)
     voertuigen: 48200,
     oppervlakteKm2: 56.63, // extern geverifieerd (Stad Leuven, officiële opgave)
     postcodes: ['3000','3001','3010','3012','3018'], // extern geverifieerd (bpost)
@@ -39,7 +39,7 @@ export const GEMEENTEN = {
     id: 'olen',
     naam: 'Olen',
     provincie: 'Antwerpen',
-    inwoners: 14000,
+    inwoners: 12943, // extern geverifieerd (Rijksregister, 1 januari 2026)
     voertuigen: 8200,
     oppervlakteKm2: 23.10, // extern geverifieerd (Wikipedia/officiële opgave)
     postcodes: ['2250'], // extern geverifieerd (Wikipedia)
@@ -60,8 +60,8 @@ export const GEMEENTEN = {
     id: 'gent',
     naam: 'Gent',
     provincie: 'Oost-Vlaanderen',
-    inwoners: 268000,
-    voertuigen: 112000,
+    inwoners: 273665, // extern geverifieerd (Rijksregister, 1 januari 2026)
+    voertuigen: 96409, // extern geverifieerd (Statbel 2023, via AlleCijfers.be)
     oppervlakteKm2: 156.18, // extern geverifieerd (Wikipedia/officiële opgave)
     postcodes: ['9000','9030','9031','9032','9040','9050','9051','9052'], // beste inschatting, mogelijk niet volledig
     welvaartsindex: 98, // schatting, nog te verifiëren bij Statbel
