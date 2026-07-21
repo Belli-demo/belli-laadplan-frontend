@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { getBevolking } from '../api';
 
 // ── Kleuren ─────────────────────────────────────────────────────────
 const C = {
@@ -43,30 +44,157 @@ async function fetchNominatim(naam, land) {
   };
 }
 
-// Overpass: haal deelgemeenten/wijken op als punten voor initiële wijkindeling
+// Oppervlakte (km2) van een polygoon obv lat/lon-coördinaten, met een lokale
+// equirectangulaire projectie (voldoende nauwkeurig op de schaal van een
+// gemeente/wijk). Retourneert null als er geen bruikbare geometrie is.
+function polygonOppervlakteKm2(coords) {
+  if (!coords || coords.length < 3) return null;
+  const R = 6371; // aardstraal in km
+  const latRad = (coords.reduce((s,c) => s + c.lat, 0) / coords.length) * Math.PI / 180;
+  const kmPerDegLat = R * Math.PI / 180;
+  const kmPerDegLon = R * Math.cos(latRad) * Math.PI / 180;
+  let opp = 0;
+  for (let i = 0; i < coords.length; i++) {
+    const j = (i + 1) % coords.length;
+    const xi = coords[i].lon * kmPerDegLon, yi = coords[i].lat * kmPerDegLat;
+    const xj = coords[j].lon * kmPerDegLon, yj = coords[j].lat * kmPerDegLat;
+    opp += xi * yj - xj * yi;
+  }
+  return Math.abs(opp) / 2;
+}
+
+// Haalt uit een Overpass-element (way of relation, met "out geom") een
+// bruikbare oppervlakte, indien de geometrie dat toelaat. Bij een relation
+// (multipolygoon) wordt de "outer"-ring gebruikt, gaten in de polygoon
+// worden dus niet afgetrokken, een bewuste, benoemde vereenvoudiging.
+function elementOppervlakteKm2(el) {
+  if (el.type === 'way' && el.geometry?.length >= 3) {
+    return polygonOppervlakteKm2(el.geometry);
+  }
+  if (el.type === 'relation' && el.members?.length) {
+    const outer = el.members.find(m => m.role === 'outer' && m.geometry?.length >= 3);
+    if (outer) return polygonOppervlakteKm2(outer.geometry);
+  }
+  return null;
+}
+
+// Haalt de echte oppervlakte van de hele gemeente op via haar eigen
+// administratieve grens (indien Overpass die teruggeeft). Valt terug op
+// null als dat niet lukt, de aanroeper moet dan zelf een schatting maken
+// (bijv. obv de bbox) en dat duidelijk als zodanig markeren.
+async function fetchGemeenteOppervlakte(naam) {
+  const query = `[out:json][timeout:20];
+relation["boundary"="administrative"]["admin_level"~"8|9"]["name"="${naam}"];
+out geom;`;
+  try {
+    const resp = await fetch('https://overpass-api.de/api/interpreter', {
+      method:'POST', body:'data='+encodeURIComponent(query),
+    });
+    if (!resp.ok) return null;
+    const json = await resp.json();
+    for (const el of (json.elements || [])) {
+      const opp = elementOppervlakteKm2(el);
+      if (opp) return opp;
+    }
+  } catch { /* stil falen, aanroeper valt terug op bbox-schatting */ }
+  return null;
+}
+
+// Echte bevolkingsopzoeking via Wikidata (property P1082 = bevolking), i.p.v.
+// de oude, foutief als "Bron: Statbel" gelabelde gok (oppervlakte × dichtheid).
+// Filtert op P17=Q31 (land = België) om verwarring met gelijknamige plaatsen
+// elders te voorkomen (bijv. Hasselt bestaat ook als buurtnaam in Nederland).
+async function fetchGemeenteBevolkingWikidata(naam) {
+  try {
+    const zoekUrl = `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(naam)}&language=nl&format=json&type=item&origin=*&limit=5`;
+    const zoekResp = await fetch(zoekUrl);
+    if (!zoekResp.ok) return null;
+    const zoekData = await zoekResp.json();
+    if (!zoekData.search?.length) return null;
+
+    for (const kandidaat of zoekData.search) {
+      const entityUrl = `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${kandidaat.id}&format=json&origin=*&props=claims`;
+      const entityResp = await fetch(entityUrl);
+      if (!entityResp.ok) continue;
+      const entityData = await entityResp.json();
+      const claims = entityData.entities?.[kandidaat.id]?.claims;
+      const land = claims?.P17?.[0]?.mainsnak?.datavalue?.value?.id;
+      if (land !== 'Q31') continue; // niet België, overslaan
+      const bevolkingClaims = claims?.P1082;
+      if (!bevolkingClaims?.length) continue;
+      // Meest recente bevolkingsopgave (P1082 kan meerdere tijdstippen bevatten)
+      const meestRecent = bevolkingClaims.reduce((best, c) => {
+        const datum = c.qualifiers?.P585?.[0]?.datavalue?.value?.time || '';
+        return (!best || datum > best.datum) ? { datum, waarde: c.mainsnak?.datavalue?.value?.amount } : best;
+      }, null);
+      const aantal = meestRecent?.waarde ?? bevolkingClaims[0].mainsnak?.datavalue?.value?.amount;
+      if (aantal) return Math.abs(parseInt(aantal));
+    }
+  } catch { /* stil falen, aanroeper valt terug op Wikidata of de oude schatting */ }
+  return null;
+}
+
+// Primaire bron: onze eigen backend, die het landelijke Rijksregister-
+// bestand server-naar-server ophaalt en cachet (geen CORS-risico, want
+// dit is een eigen-domein-aanroep). Wikidata blijft als terugvaloptie
+// staan voor het geval de cache nog leeg is (bijv. vóór de eerste
+// /geo/ververs-bevolking-aanroep).
+async function fetchGemeenteBevolking(naam) {
+  try {
+    const r = await getBevolking(naam);
+    if (r?.inwoners) return r.inwoners;
+  } catch { /* nog niet in de cache, val terug op Wikidata */ }
+  return fetchGemeenteBevolkingWikidata(naam);
+}
+
+// Overpass: haal deelgemeenten/wijken op, mét grenzen waar beschikbaar
+// (voor de dekkingsberekening o.b.v. MOW's 250m-norm), anders alleen als punt
+// (naam + positie), de oppervlakte wordt dan later proportioneel verdeeld.
 async function fetchWijkenViaOverpass(bbox) {
   const [s, w, n, e] = bbox;
-  // Haal suburbs/districts/neighbourhoods op
-  const query = `[out:json][timeout:20];
+  const query = `[out:json][timeout:25];
 (
   node["place"~"suburb|neighbourhood|district|quarter"](${s},${w},${n},${e});
-  node["admin_level"~"9|10"](${s},${w},${n},${e});
+  way["place"~"suburb|neighbourhood|quarter"](${s},${w},${n},${e});
+  relation["boundary"="administrative"]["admin_level"~"9|10"](${s},${w},${n},${e});
+  way["boundary"="administrative"]["admin_level"~"9|10"](${s},${w},${n},${e});
 );
-out;`;
+out geom;`;
   const resp = await fetch('https://overpass-api.de/api/interpreter', {
     method:'POST', body:'data='+encodeURIComponent(query),
   });
   if (!resp.ok) return [];
   const json = await resp.json();
-  return json.elements
+  return (json.elements || [])
     .filter(el => el.tags?.name)
-    .map(el => ({
-      id:   `WK_${el.id}`,
-      naam: el.tags.name,
-      lat:  el.lat,
-      lng:  el.lon,
-      type: el.tags.place || el.tags.admin_level || 'wijk',
-    }))
+    .map(el => {
+      const isPoly = el.type === 'way' || el.type === 'relation';
+      let lat = el.lat, lng = el.lon, oppervlakteKm2 = null;
+      if (isPoly) {
+        oppervlakteKm2 = elementOppervlakteKm2(el);
+        const geom = el.type === 'way' ? el.geometry : el.members?.find(m => m.role === 'outer')?.geometry;
+        if (geom?.length) {
+          lat = geom.reduce((s,c) => s + c.lat, 0) / geom.length;
+          lng = geom.reduce((s,c) => s + c.lon, 0) / geom.length;
+        }
+      }
+      return {
+        id:   `WK_${el.id}`,
+        naam: el.tags.name,
+        lat, lng, oppervlakteKm2,
+        type: el.tags.place || el.tags.admin_level || 'wijk',
+      };
+    })
+    .filter(w => w.lat != null && w.lng != null)
+    // Zelfde wijk kan als los punt én als polygoon voorkomen (bijv. een
+    // "place"-node naast een "boundary"-relation met dezelfde naam); geef
+    // de voorkeur aan de versie mét een echte, gemeten oppervlakte.
+    .reduce((acc, w) => {
+      const bestaand = acc.find(x => x.naam === w.naam);
+      if (!bestaand) acc.push(w);
+      else if (!bestaand.oppervlakteKm2 && w.oppervlakteKm2) Object.assign(bestaand, w);
+      return acc;
+    }, [])
     .slice(0, 20); // max 20 wijken
 }
 
@@ -88,6 +216,8 @@ export default function GemeenteOnboarding({ onComplete, onClose }) {
   const [voertuigen,    setVoertuigen]   = useState('');
   const [welvaartsindex,setWelvaartsindex] = useState('106.9');
   const [privePct,      setPrivePct]     = useState('50');
+  const [gemeenteOppervlakteKm2, setGemeenteOppervlakteKm2] = useState(null);
+  const [inwonersIsSchatting, setInwonersIsSchatting] = useState(true);
 
   // Wijk editing
   const [editIdx,       setEditIdx]      = useState(null);
@@ -103,26 +233,55 @@ export default function GemeenteOnboarding({ onComplete, onClose }) {
       setGeoData(geo);
       setGemeenteNaam(zoekNaam.trim());
 
-      // Schat inwoners obv bbox-oppervlakte (ruwe proxy)
+      // Ruwe bbox-proxy, ALLEEN als allerlaatste terugvaloptie als de echte
+      // opzoeking hieronder niets oplevert.
       const latDiff  = geo.bbox[2] - geo.bbox[0];
       const lngDiff  = geo.bbox[3] - geo.bbox[1];
-      const km2      = Math.round(latDiff * lngDiff * 12000);
-      const inwSchat  = Math.min(Math.max(km2 * 80, 5000), 500000);
-      setInwoners(String(Math.round(inwSchat / 1000) * 1000));
-      setVoertuigen(String(Math.round(inwSchat * 0.45 / 100) * 100));
+      const km2Schat = Math.round(latDiff * lngDiff * 12000);
+      const inwSchatRuw = Math.min(Math.max(km2Schat * 80, 5000), 500000);
+
+      // Echte bevolkingsopzoeking via Wikidata. Dit was voorheen een gok die
+      // ten onrechte als "Bron: Statbel" werd getoond; nu een echte, actuele
+      // opzoeking, met de oude gok alleen nog als terugvaloptie.
+      const echteBevolking = await fetchGemeenteBevolking(zoekNaam.trim());
+      const inwSchat = echteBevolking || inwSchatRuw;
+      setInwonersIsSchatting(!echteBevolking);
+      setInwoners(String(inwSchat));
+      // Voertuigenratio obv het gemiddelde van onze vier geverifieerde
+      // gemeenten (Leuven 0,459 / Gent 0,354 / Hasselt 0,501, gemiddeld
+      // ~0,44), i.p.v. de eerdere, niet onderbouwde 0,45. Blijft een
+      // schatting totdat er een echte, per-gemeente voertuigenbron is.
+      setVoertuigen(String(Math.round(inwSchat * 0.44 / 100) * 100));
+
+      // Echte gemeente-oppervlakte via Overpass; valt terug op de bbox-
+      // schatting hierboven als er geen administratieve grens gevonden wordt
+      // (in dat geval blijft de oppervlakte een schatting, niet een meting)
+      const gemeenteOppervlakte = (await fetchGemeenteOppervlakte(zoekNaam.trim())) || km2Schat;
+      setGemeenteOppervlakteKm2(gemeenteOppervlakte);
 
       // Haal wijken op via Overpass
       const wkData = await fetchWijkenViaOverpass(geo.bbox);
       if (wkData.length > 0) {
-        setWijken(wkData.map((w, i) => ({
-          ...w,
-          id:          `NK${String(i+1).padStart(2,'0')}`,
-          inwoners:    Math.round(inwSchat / Math.max(wkData.length, 1) / 100) * 100,
-          voertuigen:  Math.round(inwSchat * 0.45 / Math.max(wkData.length, 1) / 50) * 50,
-          wijktype:    ['woonwijk'],
-          ovAandeel:   0,
-          actief:      true,
-        })));
+        const totInwSchat = wkData.length; // gelijk verdeeld als startpunt, hieronder proportioneel over gemeten oppervlaktes waar bekend
+        setWijken(wkData.map((w, i) => {
+          const wijkInwoners = Math.round(inwSchat / Math.max(wkData.length, 1) / 100) * 100;
+          return {
+            ...w,
+            id:          `NK${String(i+1).padStart(2,'0')}`,
+            inwoners:    wijkInwoners,
+            voertuigen:  Math.round(inwSchat * 0.45 / Math.max(wkData.length, 1) / 50) * 50,
+            // Echte, via Overpass gemeten oppervlakte blijft staan (w.oppervlakteKm2
+            // uit fetchWijkenViaOverpass); is die er niet, dan een proxy op basis
+            // van inwonersaandeel van de gemeente-oppervlakte, duidelijk als
+            // zodanig te herkennen (oppervlakteIsProxy: true) totdat er een
+            // echte meting beschikbaar komt.
+            oppervlakteKm2: w.oppervlakteKm2 ?? (gemeenteOppervlakte / Math.max(wkData.length, 1)),
+            oppervlakteIsProxy: w.oppervlakteKm2 == null,
+            wijktype:    ['woonwijk'],
+            ovAandeel:   0,
+            actief:      true,
+          };
+        }));
       } else {
         // Fallback: maak 4 standaard wijken
         const kwarten = ['Noord','Zuid','Oost','West'];
@@ -134,6 +293,8 @@ export default function GemeenteOnboarding({ onComplete, onClose }) {
           lng:         geo.center[1] + (offsets[i]?.[1] || 0),
           inwoners:    Math.round(inwSchat / 4 / 100) * 100,
           voertuigen:  Math.round(inwSchat * 0.45 / 4 / 50) * 50,
+          oppervlakteKm2: gemeenteOppervlakte / 4,
+          oppervlakteIsProxy: true,
           wijktype:    ['woonwijk'],
           ovAandeel:   0,
           actief:      true,
@@ -189,6 +350,7 @@ export default function GemeenteOnboarding({ onComplete, onClose }) {
       voertuigen:parseInt(voertuigen) || 22000,
       welvaartsindex:   parseFloat(welvaartsindex) || 106.9,
       privePctBerekend: (parseFloat(privePct) || 50) / 100,
+      oppervlakteKm2:   gemeenteOppervlakteKm2,
       center:    geoData.center,
       zoom:      13,
       bbox:      geoData.bbox,
@@ -200,6 +362,7 @@ export default function GemeenteOnboarding({ onComplete, onClose }) {
         voertuigen: parseInt(w.voertuigen) || 2000,
         wijktype:   w.wijktype && w.wijktype.length ? w.wijktype : ['woonwijk'],
         ovAandeel:  w.ovAandeel || 0,
+        oppervlakteKm2: w.oppervlakteKm2 || null,
         lat:        w.lat,
         lng:        w.lng,
       })),
@@ -311,13 +474,17 @@ export default function GemeenteOnboarding({ onComplete, onClose }) {
                 </div>
                 <div style={s.row}>
                   <label style={s.label}>Totaal inwoners</label>
-                  <input style={s.input} type="number" value={inwoners} onChange={e => setInwoners(e.target.value)} />
-                  <div style={s.hint}>Bron: Statbel</div>
+                  <input style={{...s.input, border:`1px solid ${inwonersIsSchatting ? C.warn : C.darkGreen}`}} type="number" value={inwoners} onChange={e => { setInwoners(e.target.value); setInwonersIsSchatting(true); }} />
+                  {inwonersIsSchatting ? (
+                    <div style={{...s.hint, color:C.warn}}>⚠ Ruwe schatting (oppervlakte × aangenomen dichtheid): Wikidata-opzoeking is niet gelukt. Controleer en corrigeer dit handmatig, bijvoorbeeld via Statbel of AlleCijfers.be.</div>
+                  ) : (
+                    <div style={{...s.hint, color:C.darkGreen}}>✓ Rijksregister (of Wikidata als terugvaloptie)</div>
+                  )}
                 </div>
                 <div style={s.row}>
                   <label style={s.label}>Totaal voertuigen</label>
-                  <input style={s.input} type="number" value={voertuigen} onChange={e => setVoertuigen(e.target.value)} />
-                  <div style={s.hint}>Bron: DIV / Febiac wagenpark</div>
+                  <input style={{...s.input, border:`1px solid ${C.warn}`}} type="number" value={voertuigen} onChange={e => setVoertuigen(e.target.value)} />
+                  <div style={{...s.hint, color:C.warn}}>⚠ Schatting (44% van inwoners, gemiddelde ratio van onze geverifieerde gemeenten), GEEN DIV/Febiac-cijfer. Controleer en corrigeer dit handmatig.</div>
                 </div>
                 <div style={s.row}>
                   <label style={s.label}>Welvaartsindex</label>
