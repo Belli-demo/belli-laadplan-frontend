@@ -99,6 +99,40 @@ out geom;`;
   return null;
 }
 
+// Echte bevolkingsopzoeking via Wikidata (property P1082 = bevolking), i.p.v.
+// de oude, foutief als "Bron: Statbel" gelabelde gok (oppervlakte × dichtheid).
+// Filtert op P17=Q31 (land = België) om verwarring met gelijknamige plaatsen
+// elders te voorkomen (bijv. Hasselt bestaat ook als buurtnaam in Nederland).
+async function fetchGemeenteBevolking(naam) {
+  try {
+    const zoekUrl = `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(naam)}&language=nl&format=json&type=item&origin=*&limit=5`;
+    const zoekResp = await fetch(zoekUrl);
+    if (!zoekResp.ok) return null;
+    const zoekData = await zoekResp.json();
+    if (!zoekData.search?.length) return null;
+
+    for (const kandidaat of zoekData.search) {
+      const entityUrl = `https://www.wikidata.org/wiki/Special:EntityData/${kandidaat.id}.json`;
+      const entityResp = await fetch(entityUrl);
+      if (!entityResp.ok) continue;
+      const entityData = await entityResp.json();
+      const claims = entityData.entities?.[kandidaat.id]?.claims;
+      const land = claims?.P17?.[0]?.mainsnak?.datavalue?.value?.id;
+      if (land !== 'Q31') continue; // niet België, overslaan
+      const bevolkingClaims = claims?.P1082;
+      if (!bevolkingClaims?.length) continue;
+      // Meest recente bevolkingsopgave (P1082 kan meerdere tijdstippen bevatten)
+      const meestRecent = bevolkingClaims.reduce((best, c) => {
+        const datum = c.qualifiers?.P585?.[0]?.datavalue?.value?.time || '';
+        return (!best || datum > best.datum) ? { datum, waarde: c.mainsnak?.datavalue?.value?.amount } : best;
+      }, null);
+      const aantal = meestRecent?.waarde ?? bevolkingClaims[0].mainsnak?.datavalue?.value?.amount;
+      if (aantal) return Math.abs(parseInt(aantal));
+    }
+  } catch { /* stil falen, aanroeper valt terug op de oude schatting */ }
+  return null;
+}
+
 // Overpass: haal deelgemeenten/wijken op, mét grenzen waar beschikbaar
 // (voor de dekkingsberekening o.b.v. MOW's 250m-norm), anders alleen als punt
 // (naam + positie), de oppervlakte wordt dan later proportioneel verdeeld.
@@ -169,6 +203,7 @@ export default function GemeenteOnboarding({ onComplete, onClose }) {
   const [welvaartsindex,setWelvaartsindex] = useState('106.9');
   const [privePct,      setPrivePct]     = useState('50');
   const [gemeenteOppervlakteKm2, setGemeenteOppervlakteKm2] = useState(null);
+  const [inwonersIsSchatting, setInwonersIsSchatting] = useState(true);
 
   // Wijk editing
   const [editIdx,       setEditIdx]      = useState(null);
@@ -184,14 +219,25 @@ export default function GemeenteOnboarding({ onComplete, onClose }) {
       setGeoData(geo);
       setGemeenteNaam(zoekNaam.trim());
 
-      // Schat inwoners obv bbox-oppervlakte (ruwe proxy, alleen voor de
-      // inwonersschatting; de echte oppervlakte wordt hieronder apart opgehaald)
+      // Ruwe bbox-proxy, ALLEEN als allerlaatste terugvaloptie als de echte
+      // opzoeking hieronder niets oplevert.
       const latDiff  = geo.bbox[2] - geo.bbox[0];
       const lngDiff  = geo.bbox[3] - geo.bbox[1];
       const km2Schat = Math.round(latDiff * lngDiff * 12000);
-      const inwSchat  = Math.min(Math.max(km2Schat * 80, 5000), 500000);
-      setInwoners(String(Math.round(inwSchat / 1000) * 1000));
-      setVoertuigen(String(Math.round(inwSchat * 0.45 / 100) * 100));
+      const inwSchatRuw = Math.min(Math.max(km2Schat * 80, 5000), 500000);
+
+      // Echte bevolkingsopzoeking via Wikidata. Dit was voorheen een gok die
+      // ten onrechte als "Bron: Statbel" werd getoond; nu een echte, actuele
+      // opzoeking, met de oude gok alleen nog als terugvaloptie.
+      const echteBevolking = await fetchGemeenteBevolking(zoekNaam.trim());
+      const inwSchat = echteBevolking || inwSchatRuw;
+      setInwonersIsSchatting(!echteBevolking);
+      setInwoners(String(inwSchat));
+      // Voertuigenratio obv het gemiddelde van onze vier geverifieerde
+      // gemeenten (Leuven 0,459 / Gent 0,354 / Hasselt 0,501, gemiddeld
+      // ~0,44), i.p.v. de eerdere, niet onderbouwde 0,45. Blijft een
+      // schatting totdat er een echte, per-gemeente voertuigenbron is.
+      setVoertuigen(String(Math.round(inwSchat * 0.44 / 100) * 100));
 
       // Echte gemeente-oppervlakte via Overpass; valt terug op de bbox-
       // schatting hierboven als er geen administratieve grens gevonden wordt
@@ -414,13 +460,17 @@ export default function GemeenteOnboarding({ onComplete, onClose }) {
                 </div>
                 <div style={s.row}>
                   <label style={s.label}>Totaal inwoners</label>
-                  <input style={s.input} type="number" value={inwoners} onChange={e => setInwoners(e.target.value)} />
-                  <div style={s.hint}>Bron: Statbel</div>
+                  <input style={{...s.input, border:`1px solid ${inwonersIsSchatting ? C.warn : C.darkGreen}`}} type="number" value={inwoners} onChange={e => { setInwoners(e.target.value); setInwonersIsSchatting(true); }} />
+                  {inwonersIsSchatting ? (
+                    <div style={{...s.hint, color:C.warn}}>⚠ Ruwe schatting (oppervlakte × aangenomen dichtheid): Wikidata-opzoeking is niet gelukt. Controleer en corrigeer dit handmatig, bijvoorbeeld via Statbel of AlleCijfers.be.</div>
+                  ) : (
+                    <div style={{...s.hint, color:C.darkGreen}}>✓ Wikidata (meest recente bevolkingsopgave)</div>
+                  )}
                 </div>
                 <div style={s.row}>
                   <label style={s.label}>Totaal voertuigen</label>
-                  <input style={s.input} type="number" value={voertuigen} onChange={e => setVoertuigen(e.target.value)} />
-                  <div style={s.hint}>Bron: DIV / Febiac wagenpark</div>
+                  <input style={{...s.input, border:`1px solid ${C.warn}`}} type="number" value={voertuigen} onChange={e => setVoertuigen(e.target.value)} />
+                  <div style={{...s.hint, color:C.warn}}>⚠ Schatting (44% van inwoners, gemiddelde ratio van onze geverifieerde gemeenten), GEEN DIV/Febiac-cijfer. Controleer en corrigeer dit handmatig.</div>
                 </div>
                 <div style={s.row}>
                   <label style={s.label}>Welvaartsindex</label>
