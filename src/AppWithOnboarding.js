@@ -197,6 +197,29 @@ export default function AppWithOnboarding() {
     return { wijk:w, data:{ ...data, bestaand, delta, capex,
       deltaTotaal: delta.AC + delta.DC + delta.HPC } };
   });
+  // DEBUG: log de berekende waarden per wijk voor inspectie in browser console
+  if (process.env.NODE_ENV !== 'production') {
+    console.table(wijkResults.map(r => ({
+      wijk: r.wijk.naam,
+      voertuigen: r.wijk.voertuigen,
+      privePct: r.data.privePct,
+      evPct: r.data.evPct?.toFixed(3),
+      totMwh: Math.round(r.data.totMwh),
+      totAC: Math.round(r.data.totAC),
+      totDC: Math.round(r.data.totDC),
+      totHPC: Math.round(r.data.totHPC),
+      totLP: Math.round(r.data.totLP),
+      bestaandAC: r.data.bestaand.AC?.toFixed(1),
+      bestaandDC: r.data.bestaand.DC?.toFixed(1),
+      bestaandHPC: r.data.bestaand.HPC?.toFixed(1),
+      deltaAC: r.data.delta.AC?.toFixed(1),
+      deltaDC: r.data.delta.DC?.toFixed(1),
+      deltaHPC: r.data.delta.HPC?.toFixed(1),
+      deltaTotaal: r.data.deltaTotaal?.toFixed(1),
+    })));
+    console.log('calcParams:', JSON.stringify({ year, privePct: gemeente?.privePctBerekend, privePctOverride, welvaartsindex: gemeente?.welvaartsindex }));
+    console.log('bestaandTotaalPerType:', JSON.stringify(bestaandTotaalPerType));
+  }
   const alleDeltas = wijkResults.map(r => r.data.deltaTotaal);
   const totLP       = wijkResults.reduce((s,r)=>s+r.data.totLP,0);
   const totMwh      = wijkResults.reduce((s,r)=>s+r.data.totMwh,0);
