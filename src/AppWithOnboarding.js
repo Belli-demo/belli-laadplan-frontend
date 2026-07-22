@@ -404,7 +404,7 @@ export default function AppWithOnboarding() {
     if (gemeente?.center) {
       mapInstance.current.setView(gemeente.center, gemeente.zoom || 13);
     }
-  }, [showDashboard]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [showDashboard]);
 
   // ── Bestaande palen ────────────────────────────────────────────────
   const loadBestaandePalen = useCallback(async () => {
