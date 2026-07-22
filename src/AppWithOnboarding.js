@@ -661,8 +661,8 @@ export default function AppWithOnboarding() {
     cTabs:  { display:'flex', gap:7, marginBottom:8 },
     cTab:   (a) => ({ fontSize:12, fontWeight:700, padding:'4px 10px', borderRadius:5, cursor:'pointer', border:`1px solid ${a?C.tealDark:C.border}`, background:a?C.tealDark:'transparent', color:a?'#fff':C.textDim }),
     // ── Wijkpagina ─────────────────────────────────────────────────────
-    wPage:  { flex:1, overflowY:'auto', padding:'24px', display:'flex', gap:20, alignItems:'start' },
-    wList:  { display:'flex', flexDirection:'column', gap:10, width:380, flexShrink:0 },
+    wPage:  { flex:1, overflowY:'auto', padding:'24px', display:'flex', gap:20, alignItems:'start', height:'100%', boxSizing:'border-box' },
+    wList:  { display:'flex', flexDirection:'column', gap:10, width:380, flexShrink:0, overflowY:'auto', maxHeight:'100%' },
     wCard:  (a) => ({ border:`1px solid ${a?C.teal:C.border}`, borderRadius:12, padding:'16px 18px', cursor:'pointer', transition:'border-color 0.15s', background:a?'rgba(78,205,196,0.05)':C.panelBg }),
     wNaam:  { fontSize:16, fontWeight:700, color:C.text, marginBottom:3 },
     wType:  { fontSize:12, color:C.textDim, marginBottom:10 },
@@ -673,7 +673,7 @@ export default function AppWithOnboarding() {
     wBar:   { height:3, borderRadius:2, marginTop:10, background:C.surface2, overflow:'hidden' },
     urgBadge:(kleur) => ({ padding:'3px 10px', borderRadius:20, fontSize:12, fontWeight:600, background:`${kleur}18`, color:kleur, border:`1px solid ${kleur}44`, flexShrink:0 }),
     // ── Detail paneel (wijken) ──────────────────────────────────────────
-    dPanel: { flex:1, background:C.panelBg, border:`1px solid ${C.border}`, borderRadius:12, overflow:'hidden' },
+    dPanel: { flex:1, background:C.panelBg, border:`1px solid ${C.border}`, borderRadius:12, overflow:'auto', maxHeight:'100%' },
     dHdr:   { padding:'20px 24px', borderBottom:`1px solid ${C.border}` },
     dNaam:  { fontSize:20, fontWeight:700, color:C.text, marginBottom:4 },
     dMeta:  { fontSize:13, color:C.textDim },
@@ -705,6 +705,30 @@ export default function AppWithOnboarding() {
     : (wijkResults.length ? wijkResults.slice().sort((a,b) => b.data.deltaTotaal - a.data.deltaTotaal)[0] : null);
 
   const STANDAARD_IDS = ['leuven','olen','gent'];
+
+  // ── Tijdlijn per wijk (2027-2035) ────────────────────────────────────
+  // Berekend on-the-fly voor de geselecteerde wijk in het detailpaneel.
+  const wijkTijdreeks = (wijk) => {
+    if (!wijk) return [];
+    return YEARS.filter(y => y >= 2027).map(yr => {
+      const p = { ...calcParams, year: yr, evAandeelOverride: gemeente?.evAandeelOverride?.[yr] ?? null };
+      const d = calcWijk(wijk, p);
+      const bestaand = bestaandPerWijk[wijk.id] || { AC: 0, DC: 0, HPC: 0 };
+      const delta = {
+        AC:  Math.max(0, d.totAC  - bestaand.AC),
+        DC:  Math.max(0, d.totDC  - bestaand.DC),
+        HPC: Math.max(0, d.totHPC - bestaand.HPC),
+      };
+      const capex = delta.AC * 4500 + delta.DC * 29000 + delta.HPC * 82000;
+      return {
+        jaar: yr,
+        totMwh: Math.round(d.totMwh),
+        bijkomend: Math.ceil(delta.AC + delta.DC + delta.HPC),
+        totLP: Math.ceil(d.totLP),
+        capex: Math.round(capex / 1000),
+      };
+    });
+  };
 
   return (
     <>
@@ -973,16 +997,16 @@ export default function AppWithOnboarding() {
                     </div>
                     <div style={st.wStats}>
                       <div style={st.wStat}>
-                        <div style={st.wSV(kleur)}>{Math.ceil(data.deltaTotaal)}</div>
-                        <div style={st.wSL}>LP nodig</div>
+                        <div style={st.wSV(C.text)}>{Math.ceil(data.totLP)}</div>
+                        <div style={st.wSL}>LP totaal</div>
+                      </div>
+                      <div style={st.wStat}>
+                        <div style={st.wSV(data.deltaTotaal > 0 ? kleur : C.teal)}>{Math.ceil(data.deltaTotaal)}</div>
+                        <div style={st.wSL}>Bijkomend</div>
                       </div>
                       <div style={st.wStat}>
                         <div style={st.wSV()}>{Math.round(data.totMwh)}</div>
                         <div style={st.wSL}>MWh/j</div>
-                      </div>
-                      <div style={st.wStat}>
-                        <div style={st.wSV(kleur)}>{fmtEur(data.capex)}</div>
-                        <div style={st.wSL}>CAPEX</div>
                       </div>
                     </div>
                     <div style={st.wBar}>
@@ -1049,6 +1073,42 @@ export default function AppWithOnboarding() {
                     </div>
                   ))}
                 </div>
+                <hr style={st.dDiv}/>
+                <div style={st.dSecL}>Ontwikkeling 2027–2035</div>
+                {(() => {
+                  const reeks = wijkTijdreeks(wijk);
+                  const maxBij = Math.max(...reeks.map(r => r.bijkomend), 1);
+                  const maxMwh = Math.max(...reeks.map(r => r.totMwh), 1);
+                  return (
+                    <div style={{overflowX:'auto'}}>
+                      <table style={{width:'100%',borderCollapse:'collapse',fontSize:12,marginBottom:8}}>
+                        <thead>
+                          <tr>
+                            {['Jaar','LP totaal','Bijkomend','MWh/j','CAPEX €K'].map(h => (
+                              <th key={h} style={{padding:'6px 8px',textAlign:'right',color:C.textDim,fontWeight:600,fontSize:11,borderBottom:`1px solid ${C.border}`}}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {reeks.map((r, i) => {
+                            const isHuidig = r.jaar === year;
+                            return (
+                              <tr key={r.jaar} style={{background: isHuidig ? 'rgba(78,205,196,0.08)' : 'transparent', cursor:'pointer'}}
+                                onClick={() => setYear(r.jaar)}>
+                                <td style={{padding:'6px 8px',fontWeight: isHuidig ? 700 : 400, color: isHuidig ? C.teal : C.textMid}}>{r.jaar}</td>
+                                <td style={{padding:'6px 8px',textAlign:'right',color:C.text,fontVariantNumeric:'tabular-nums'}}>{r.totLP}</td>
+                                <td style={{padding:'6px 8px',textAlign:'right',color: r.bijkomend > 0 ? C.warn : C.teal,fontWeight:700,fontVariantNumeric:'tabular-nums'}}>{r.bijkomend > 0 ? `+${r.bijkomend}` : '✓'}</td>
+                                <td style={{padding:'6px 8px',textAlign:'right',color:C.textMid,fontVariantNumeric:'tabular-nums'}}>{r.totMwh}</td>
+                                <td style={{padding:'6px 8px',textAlign:'right',color: r.capex > 0 ? C.gold : C.textDim,fontVariantNumeric:'tabular-nums'}}>{r.capex > 0 ? r.capex : '—'}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                      <div style={{fontSize:11,color:C.textDim}}>Klik op een jaar om de kaartweergave bij te werken.</div>
+                    </div>
+                  );
+                })()}
               </div>
             );
           })()}
