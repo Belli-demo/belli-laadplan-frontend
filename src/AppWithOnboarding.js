@@ -387,6 +387,11 @@ export default function AppWithOnboarding() {
   }, [gemId]);
 
   // ── Kaart init ─────────────────────────────────────────────────────
+  // showDashboard staat in de dependency array: de analyseview wordt pas
+  // gemount nadat het dashboard verdwijnt, dus mapRef.current is nog null
+  // op het moment dat de effect voor het eerst draait. Door showDashboard
+  // mee te geven, herprobeert React de init zodra de analyseview zichtbaar
+  // wordt. De guard (mapInstance.current) zorgt dat dit maar één keer gebeurt.
   useEffect(() => {
     if (mapInstance.current || !mapRef.current) return;
     mapInstance.current = L.map(mapRef.current, {
@@ -396,7 +401,10 @@ export default function AppWithOnboarding() {
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
       attribution:'© OpenStreetMap © CARTO', maxZoom:19,
     }).addTo(mapInstance.current);
-  }, []);
+    if (gemeente?.center) {
+      mapInstance.current.setView(gemeente.center, gemeente.zoom || 13);
+    }
+  }, [showDashboard]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Bestaande palen ────────────────────────────────────────────────
   const loadBestaandePalen = useCallback(async () => {
