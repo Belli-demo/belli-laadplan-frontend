@@ -6,6 +6,7 @@ import { GEMEENTEN as FALLBACK_GEMEENTEN, calcWijk, YEARS, slimLadenExtraRuimte 
 import GemeenteOnboarding from './components/GemeenteOnboarding';
 import GemeenteEditor from './components/GemeenteEditor';
 import { getAlleGemeenten, getGemeente, slaGemeenteOp, verwijderGemeente, checkHealth, onboardGemeenteGeo, getSectoren, syncWijkenVanStatbel, getLaadpalen } from './api';
+import Dashboard from './Dashboard';
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -88,6 +89,7 @@ export default function AppWithOnboarding() {
 
   // ── UI state ───────────────────────────────────────────────────────
   const [gemId,           setGemId]          = useState('leuven');
+  const [showDashboard,   setShowDashboard]  = useState(true);  // Start op dashboard
   const [showOnboarding,  setShowOnboarding] = useState(false);
   const [showDelete,      setShowDelete]     = useState(false);
   const [showEditor,      setShowEditor]     = useState(false);
@@ -622,6 +624,24 @@ export default function AppWithOnboarding() {
 
   const STANDAARD_IDS = ['leuven','olen','gent'];
 
+  // ── Dashboard: toon startpagina tot gebruiker een gemeente selecteert ──
+  if (showDashboard) {
+    return (
+      <Dashboard
+        gemeenten={gemeenten}
+        dbStatus={dbStatus}
+        onSelectGemeente={(id) => {
+          setGemId(id);
+          setShowDashboard(false);
+        }}
+        onStartOnboarding={() => {
+          setShowDashboard(false);
+          setShowOnboarding(true);
+        }}
+      />
+    );
+  }
+
   return (
     <div style={st.app}>
       <style>{`
@@ -712,13 +732,14 @@ export default function AppWithOnboarding() {
       {/* SIDEBAR */}
       <div style={st.side}>
         <div style={st.logo}>
-          <div>
-            <img
-              src="/logo-longhill.png"
-              alt="Longhill"
-              style={{ width:20, height:'auto', verticalAlign:'middle' }}
-            />
-            <span style={{ fontSize:11, color:C.textMid, marginLeft:8 }}>laadkaart</span>
+          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+            <button
+              onClick={() => setShowDashboard(true)}
+              style={{ background:'none', border:'none', cursor:'pointer', color:C.textMid, fontSize:11, display:'flex', alignItems:'center', gap:4, padding:0 }}
+              title="Terug naar alle gemeenten"
+            >
+              ← Alle gemeenten
+            </button>
           </div>
           <span style={st.dbBadge(dbStatus)}>
             {dbStatus==='online'?'● DB online':dbStatus==='offline'?'● DB offline':'● laden'}
