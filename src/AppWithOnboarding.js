@@ -89,7 +89,8 @@ export default function AppWithOnboarding() {
 
   // ── UI state ───────────────────────────────────────────────────────
   const [gemId,           setGemId]          = useState('leuven');
-  const [showDashboard,   setShowDashboard]  = useState(true);  // Start op dashboard
+  const [showDashboard,   setShowDashboard]  = useState(true);
+  const [mapReady,        setMapReady]       = useState(false);
   const [showOnboarding,  setShowOnboarding] = useState(false);
   const [showDelete,      setShowDelete]     = useState(false);
   const [showEditor,      setShowEditor]     = useState(false);
@@ -317,9 +318,14 @@ export default function AppWithOnboarding() {
     setSelectedWijk(null);
     sectorenRef.current = null;
     setSectorenGeladen(0);
-    loadBestaandePalen();
-    if (mapInstance.current && gemeente) {
-      mapInstance.current.setView(gemeente.center, gemeente.zoom, { animate:true });
+    // loadBestaandePalen en setView pas uitvoeren als kaart bestaat.
+    // Bij eerste render vanuit dashboard bestaat de kaart nog niet;
+    // de mapReady-trigger vanuit kaart-init zorgt dan voor de laadpalen.
+    if (mapInstance.current) {
+      loadBestaandePalen();
+      if (gemeente) {
+        mapInstance.current.setView(gemeente.center, gemeente.zoom, { animate:true });
+      }
     }
   }, [gemId]);
 
@@ -381,29 +387,43 @@ export default function AppWithOnboarding() {
   }, [gemeenten, dbStatus]);
 
   // ── Sectoren laden (apart, na gemeente-switch) ─────────────────────
+  // Wacht op mapReady: sectoren worden als GeoJSON op de kaart getekend
+  // en kunnen pas geladen worden nadat mapInstance.current bestaat.
   useEffect(() => {
+    if (!mapInstance.current) return;
     sectorenRef.current = null;
     loadSectoren(gemId);
-  }, [gemId]);
+  }, [gemId, mapReady]);
 
   // ── Kaart init ─────────────────────────────────────────────────────
-  // showDashboard staat in de dependency array: de analyseview wordt pas
-  // gemount nadat het dashboard verdwijnt, dus mapRef.current is nog null
-  // op het moment dat de effect voor het eerst draait. Door showDashboard
-  // mee te geven, herprobeert React de init zodra de analyseview zichtbaar
-  // wordt. De guard (mapInstance.current) zorgt dat dit maar één keer gebeurt.
+  // showDashboard als dependency: mapRef.current bestaat pas nadat de
+  // analyseview gemount is (dus nadat showDashboard false wordt).
+  // mapReady triggert vervolgens alle kaartlagen via hun eigen effects.
   useEffect(() => {
-    if (mapInstance.current || !mapRef.current) return;
+    if (showDashboard) return;               // analyseview nog niet zichtbaar
+    if (mapInstance.current) {
+      // Kaart bestaat al (terug vanuit dashboard): invalideer size en
+      // herstel de view zodat tiles correct hertekend worden.
+      setTimeout(() => {
+        mapInstance.current.invalidateSize();
+        if (gemeente?.center) {
+          mapInstance.current.setView(gemeente.center, gemeente.zoom || 13);
+        }
+        setMapReady(prev => !prev);          // trigger lagen-effects opnieuw
+      }, 50);
+      return;
+    }
+    if (!mapRef.current) return;
     mapInstance.current = L.map(mapRef.current, {
-      center: [50.8798, 4.7005], zoom: 13, zoomControl:false,
+      center: gemeente?.center || [50.8798, 4.7005],
+      zoom: gemeente?.zoom || 13,
+      zoomControl: false,
     });
     L.control.zoom({ position:'topleft' }).addTo(mapInstance.current);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
       attribution:'© OpenStreetMap © CARTO', maxZoom:19,
     }).addTo(mapInstance.current);
-    if (gemeente?.center) {
-      mapInstance.current.setView(gemeente.center, gemeente.zoom || 13);
-    }
+    setMapReady(true);                       // kaart klaar: lagen kunnen laden
   }, [showDashboard]);
 
   // ── Bestaande palen ────────────────────────────────────────────────
@@ -420,6 +440,13 @@ export default function AppWithOnboarding() {
     }
     setLoadingPalen(false);
   }, [gemId, gemeente]);
+
+
+  // ── Laad bestaande palen zodra kaart klaar is (eerste keer vanuit dashboard) ──
+  useEffect(() => {
+    if (!mapInstance.current) return;
+    loadBestaandePalen();
+  }, [mapReady]);
 
   // ── Kaart wijklagen ────────────────────────────────────────────────
   useEffect(() => {
@@ -632,7 +659,7 @@ export default function AppWithOnboarding() {
 
   const STANDAARD_IDS = ['leuven','olen','gent'];
 
-  // ── Dashboard: toon startpagina tot gebruiker een gemeente selecteert ──
+  // ── Dashboard ──────────────────────────────────────────────────────
   if (showDashboard) {
     return (
       <Dashboard
