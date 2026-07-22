@@ -539,7 +539,7 @@ export default function AppWithOnboarding() {
     // Voeg lagen toe aan kaart
     wg.addTo(mapInstance.current);
     wijkLayerRef.current = wg;
-  }, [gemId, year, privePctOverride, redundantieMarge, trendFactor, trends, gemeenten, sectorenGeladen, existingPalen]);
+  }, [gemId, year, privePctOverride, redundantieMarge, trendFactor, trends, gemeenten, sectorenGeladen, existingPalen, mapReady]);
 
   // ── Bestaande palen laag ───────────────────────────────────────────
   useEffect(() => {
@@ -608,7 +608,7 @@ export default function AppWithOnboarding() {
     });
 
     g.addTo(mapInstance.current); existLayerRef.current = g;
-  }, [existingPalen]);
+  }, [existingPalen, mapReady]);
 
   const fmtEur = n => `€${Math.round(n/1000).toLocaleString('nl-BE')}K`;
   const fmtN   = n => Math.round(n).toLocaleString('nl-NL');
