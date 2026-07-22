@@ -386,9 +386,21 @@ export default function AppWithOnboarding() {
     setShowDelete(false);
   }, [gemeenten, dbStatus]);
 
+  // ── invalidateSize zodra dashboard verdwijnt ──────────────────────
+  // De kaart-div was verborgen (display:none); Leaflet kent de grootte
+  // niet meer. invalidateSize met een korte delay lost dit op.
+  useEffect(() => {
+    if (!showDashboard && mapInstance.current) {
+      setTimeout(() => {
+        mapInstance.current.invalidateSize();
+        if (gemeente?.center) {
+          mapInstance.current.setView(gemeente.center, gemeente.zoom || 13, { animate: false });
+        }
+      }, 50);
+    }
+  }, [showDashboard]);
+
   // ── Sectoren laden (apart, na gemeente-switch) ─────────────────────
-  // Wacht op mapReady: sectoren worden als GeoJSON op de kaart getekend
-  // en kunnen pas geladen worden nadat mapInstance.current bestaat.
   useEffect(() => {
     if (!mapInstance.current) return;
     sectorenRef.current = null;
@@ -396,35 +408,22 @@ export default function AppWithOnboarding() {
   }, [gemId, mapReady]);
 
   // ── Kaart init ─────────────────────────────────────────────────────
-  // showDashboard als dependency: mapRef.current bestaat pas nadat de
-  // analyseview gemount is (dus nadat showDashboard false wordt).
-  // mapReady triggert vervolgens alle kaartlagen via hun eigen effects.
+  // De analyseview (inclusief kaart-div) blijft altijd in de DOM.
+  // Dashboard wordt als overlay getoond via display:none op de analyseview.
+  // Daardoor initialiseert de kaart gewoon bij mount, één keer.
   useEffect(() => {
-    if (showDashboard) return;               // analyseview nog niet zichtbaar
-    if (mapInstance.current) {
-      // Kaart bestaat al (terug vanuit dashboard): invalideer size en
-      // herstel de view zodat tiles correct hertekend worden.
-      setTimeout(() => {
-        mapInstance.current.invalidateSize();
-        if (gemeente?.center) {
-          mapInstance.current.setView(gemeente.center, gemeente.zoom || 13);
-        }
-        setMapReady(prev => !prev);          // trigger lagen-effects opnieuw
-      }, 50);
-      return;
-    }
-    if (!mapRef.current) return;
+    if (!mapRef.current || mapInstance.current) return;
     mapInstance.current = L.map(mapRef.current, {
-      center: gemeente?.center || [50.8798, 4.7005],
-      zoom: gemeente?.zoom || 13,
+      center: [50.8798, 4.7005],
+      zoom: 13,
       zoomControl: false,
     });
     L.control.zoom({ position:'topleft' }).addTo(mapInstance.current);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
       attribution:'© OpenStreetMap © CARTO', maxZoom:19,
     }).addTo(mapInstance.current);
-    setMapReady(true);                       // kaart klaar: lagen kunnen laden
-  }, [showDashboard]);
+    setMapReady(true);
+  }, []);
 
   // ── Bestaande palen ────────────────────────────────────────────────
   const loadBestaandePalen = useCallback(async () => {
@@ -659,26 +658,23 @@ export default function AppWithOnboarding() {
 
   const STANDAARD_IDS = ['leuven','olen','gent'];
 
-  // ── Dashboard ──────────────────────────────────────────────────────
-  if (showDashboard) {
-    return (
-      <Dashboard
-        gemeenten={gemeenten}
-        dbStatus={dbStatus}
-        onSelectGemeente={(id) => {
-          setGemId(id);
-          setShowDashboard(false);
-        }}
-        onStartOnboarding={() => {
-          setShowDashboard(false);
-          setShowOnboarding(true);
-        }}
-      />
-    );
-  }
-
   return (
-    <div style={st.app}>
+    <>
+      {showDashboard && (
+        <Dashboard
+          gemeenten={gemeenten}
+          dbStatus={dbStatus}
+          onSelectGemeente={(id) => {
+            setGemId(id);
+            setShowDashboard(false);
+          }}
+          onStartOnboarding={() => {
+            setShowDashboard(false);
+            setShowOnboarding(true);
+          }}
+        />
+      )}
+      <div style={{...st.app, display: showDashboard ? 'none' : 'flex'}}>
       <style>{`
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
         ::-webkit-scrollbar{width:4px}
@@ -1026,5 +1022,6 @@ export default function AppWithOnboarding() {
         </div>
       </div>
     </div>
+    </>
   );
 }
