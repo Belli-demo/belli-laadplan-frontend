@@ -875,6 +875,20 @@ export default function AppWithOnboarding() {
               </svg>
               Stadsdelen
             </div>
+            <div style={st.navItem(false)} onClick={() => setShowEditor(true)}>
+              <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M11 2l3 3-8 8H3v-3l8-8z"/>
+              </svg>
+              Gemeente bewerken
+            </div>
+            {!STANDAARD_IDS.includes(gemId) && (
+              <div style={{...st.navItem(false), color:C.warn}} onClick={() => setShowDelete(true)}>
+                <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <polyline points="3 6 13 6"/><path d="M5 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><rect x="3" y="6" width="10" height="9" rx="1"/>
+                </svg>
+                Verwijderen
+              </div>
+            )}
           </div>
 
           {/* EV-aandeel & jaar */}
@@ -961,21 +975,6 @@ export default function AppWithOnboarding() {
             </div>
           </div>
 
-          {/* Gemeente beheer: onder Stadsdelen-knop als nav-items */}
-          <div style={st.navItem(false)} onClick={() => setShowEditor(true)}>
-            <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M11 2l3 3-8 8H3v-3l8-8z"/>
-            </svg>
-            Gemeente bewerken
-          </div>
-          {!STANDAARD_IDS.includes(gemId) && (
-            <div style={{...st.navItem(false), color:C.warn}} onClick={() => setShowDelete(true)}>
-              <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <polyline points="3 6 13 6"/><path d="M5 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><rect x="3" y="6" width="10" height="9" rx="1"/>
-              </svg>
-              Verwijderen
-            </div>
-          )}
           {dbStatus==='offline' && <div style={{fontSize:12,color:C.gold,padding:'6px 16px'}}>Lokale modus</div>}
 
         </div>
@@ -1008,7 +1007,7 @@ export default function AppWithOnboarding() {
                       </div>
                       <div style={st.wStat}>
                         <div style={st.wSV(data.deltaTotaal > 0 ? kleur : C.teal)}>{Math.ceil(data.deltaTotaal)}</div>
-                        <div style={st.wSL}>Bijkomend</div>
+                        <div style={st.wSL}>Bij {year}</div>
                       </div>
                       <div style={st.wStat}>
                         <div style={st.wSV()}>{Math.round(data.totMwh)}</div>
@@ -1100,7 +1099,12 @@ export default function AppWithOnboarding() {
                             const isHuidig = r.jaar === year;
                             return (
                               <tr key={r.jaar} style={{background: isHuidig ? 'rgba(78,205,196,0.08)' : 'transparent', cursor:'pointer'}}
-                                onClick={() => setYear(r.jaar)}>
+                                onClick={() => {
+                                setYear(r.jaar);
+                                if (!selectedWijkDetail && geselecteerdeWijkResult) {
+                                  setSelectedWijkDetail(geselecteerdeWijkResult.wijk.id);
+                                }
+                              }}>
                                 <td style={{padding:'6px 8px',fontWeight: isHuidig ? 700 : 400, color: isHuidig ? C.teal : C.textMid}}>{r.jaar}</td>
                                 <td style={{padding:'6px 8px',textAlign:'right',color:C.text,fontVariantNumeric:'tabular-nums'}}>{r.totLP}</td>
                                 <td style={{padding:'6px 8px',textAlign:'right',color: r.bijkomend > 0 ? C.warn : C.teal,fontWeight:700,fontVariantNumeric:'tabular-nums'}}>{r.bijkomend > 0 ? `+${r.bijkomend}` : '✓'}</td>
