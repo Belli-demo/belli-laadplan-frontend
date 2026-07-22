@@ -16,11 +16,12 @@ L.Icon.Default.mergeOptions({
 });
 
 const C = {
-  darkBg:'#0d1c22', panelBg:'#122028', border:'#1e3a46',
-  teal:'#9EC5CB', tealDark:'#2B5F6E', green:'#B7D2AE',
-  darkGreen:'#3A6B4A', gold:'#D0AC41', warn:'#E8683A',
-  text:'#e0eef2', textMid:'#7aacb4', textDim:'#3a6a74',
-  red:'#E8683A',
+  darkBg:'#0F1117', panelBg:'#1A1F2E', surface2:'#222839',
+  border:'rgba(255,255,255,0.08)', borderStrong:'rgba(255,255,255,0.15)',
+  teal:'#4ECDC4', tealDark:'#2B5F6E', green:'#4ECDC4',
+  darkGreen:'#2B5F6E', gold:'#E8963A', warn:'#E8963A',
+  text:'#FFFFFF', textMid:'rgba(255,255,255,0.92)', textDim:'rgba(255,255,255,0.55)',
+  red:'#E05C5C',
 };
 
 // Kleur relatief tov de laagste/hoogste waarde binnen de huidige gemeente,
@@ -91,6 +92,7 @@ export default function AppWithOnboarding() {
   const [gemId,           setGemId]          = useState('leuven');
   const [showDashboard,   setShowDashboard]  = useState(true);
   const [mapReady,        setMapReady]       = useState(false);
+  const [showWijken,      setShowWijken]     = useState(false);
   const [showOnboarding,  setShowOnboarding] = useState(false);
   const [showDelete,      setShowDelete]     = useState(false);
   const [showEditor,      setShowEditor]     = useState(false);
@@ -109,6 +111,7 @@ export default function AppWithOnboarding() {
   const [existingPalen,   setExistingPalen]  = useState([]);
   const [loadingPalen,    setLoadingPalen]   = useState(false);
   const [chartTab,        setChartTab]       = useState('lp');
+  const [selectedWijkDetail, setSelectedWijkDetail] = useState(null);
 
   const mapRef        = useRef(null);
   const mapInstance   = useRef(null);
@@ -615,46 +618,91 @@ export default function AppWithOnboarding() {
 
   // ── Stijlen ────────────────────────────────────────────────────────
   const st = {
-    app:    { display:'flex', height:'100vh', background:C.darkBg, color:C.text, fontFamily:"'Segoe UI',system-ui,sans-serif", overflow:'hidden' },
-    side:   { width:300, background:C.panelBg, borderRight:`1px solid ${C.border}`, display:'flex', flexDirection:'column', overflow:'hidden' },
-    logo:   { padding:'12px 16px', borderBottom:`1px solid ${C.border}`, display:'flex', justifyContent:'space-between', alignItems:'center' },
-    dbBadge:(s) => ({ fontSize:9, fontWeight:700, padding:'2px 7px', borderRadius:3, background: s==='online'?'#0a2a1a':s==='offline'?'#2a0a0a':'#1a1a0a', color:s==='online'?C.green:s==='offline'?C.warn:C.gold, border:`1px solid ${s==='online'?C.darkGreen:s==='offline'?C.warn:C.gold}` }),
+    // ── Shell ──────────────────────────────────────────────────────────
+    app:    { display:'flex', flexDirection:'column', height:'100vh', background:'#0F1117', color:C.text, fontFamily:"'Inter','Segoe UI',system-ui,sans-serif", overflow:'hidden' },
+    topbar: { height:52, background:C.panelBg, borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', padding:'0 20px', gap:16, flexShrink:0 },
+    body:   { display:'flex', flex:1, overflow:'hidden' },
+    // ── Topbar ─────────────────────────────────────────────────────────
+    tbBack: { display:'flex', alignItems:'center', gap:6, fontSize:13, color:C.textDim, cursor:'pointer', background:'none', border:'none', padding:'0 16px 0 0', borderRight:`1px solid ${C.border}`, height:52, fontFamily:'inherit' },
+    tbGem:  { fontSize:20, fontWeight:700, color:C.text, letterSpacing:'-0.01em' },
+    tbMeta: { fontSize:13, color:C.textDim, marginLeft:8 },
+    dbBadge:(s) => ({ display:'flex', alignItems:'center', gap:5, fontSize:12, marginLeft:'auto', color: s==='online'?C.green:s==='offline'?C.red:C.gold }),
+    dbDot:  (s) => ({ width:6, height:6, borderRadius:'50%', background: s==='online'?C.green:s==='offline'?C.red:C.gold }),
+    // ── Sidebar ────────────────────────────────────────────────────────
+    side:   { width:300, background:C.panelBg, borderRight:`1px solid ${C.border}`, display:'flex', flexDirection:'column', overflow:'hidden', flexShrink:0 },
     scroll: { flex:1, overflowY:'auto' },
     sec:    { borderBottom:`1px solid ${C.border}` },
-    sHdr:   { fontSize:9, fontWeight:700, letterSpacing:'1px', textTransform:'uppercase', color:C.textDim, padding:'9px 16px 4px' },
-    sBody:  { padding:'4px 16px 12px' },
-    gemWrap:{ display:'flex', flexWrap:'wrap', gap:5, marginBottom:5 },
-    gemBtn: (a,c) => ({ padding:'5px 8px', borderRadius:5, fontSize:10, fontWeight:700, cursor:'pointer', border:`1.5px solid ${a?c:C.border}`, background:a?c+'33':'transparent', color:a?c:C.textDim }),
-    addBtn: { padding:'5px 8px', borderRadius:5, fontSize:10, fontWeight:700, cursor:'pointer', border:`1.5px dashed ${C.border}`, color:C.textDim, background:'transparent' },
-    yTabs:  { display:'flex', gap:5, marginTop:8 },
-    yTab:   (a) => ({ flex:1, padding:'5px 0', borderRadius:5, fontSize:11, fontWeight:700, textAlign:'center', cursor:'pointer', border:`1.5px solid ${a?C.tealDark:C.border}`, background:a?C.tealDark:'transparent', color:a?'#fff':C.textDim }),
-    sl:     { width:'100%', accentColor:C.teal, cursor:'pointer', margin:'3px 0' },
-    lbl:    { display:'flex', justifyContent:'space-between', fontSize:11, color:C.textMid, marginBottom:2 },
-    lv:     { fontWeight:700, color:C.teal },
-    segG:   { display:'grid', gridTemplateColumns:'1fr 1fr', gap:4 },
-    segB:   (a,c) => ({ padding:'5px 4px', borderRadius:5, fontSize:10, fontWeight:700, textAlign:'center', cursor:'pointer', border:`1.5px solid ${a?c:C.border}`, background:a?c+'22':'transparent', color:a?c:C.textDim }),
-    tR:     { display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 },
-    tog:    (on) => ({ width:34, height:18, borderRadius:9, background:on?C.darkGreen:'#1e3a46', position:'relative', cursor:'pointer' }),
+    sHdr:   { fontSize:11, fontWeight:600, letterSpacing:'0.08em', textTransform:'uppercase', color:C.textDim, padding:'14px 16px 6px' },
+    sBody:  { padding:'6px 16px 14px' },
+    // ── Nav items ──────────────────────────────────────────────────────
+    navItem:(a) => ({ display:'flex', alignItems:'center', gap:10, padding:'10px 16px', fontSize:14, color:a?C.teal:C.textMid, cursor:'pointer', borderLeft:`2px solid ${a?C.teal:'transparent'}`, background:a?'rgba(78,205,196,0.07)':'transparent', transition:'all 0.12s', userSelect:'none' }),
+    // ── Parameters ─────────────────────────────────────────────────────
+    yTabs:  { display:'flex', gap:4, flexWrap:'wrap', marginTop:8 },
+    yTab:   (a) => ({ padding:'5px 10px', borderRadius:4, fontSize:13, fontWeight:500, cursor:'pointer', border:`1px solid ${a?C.tealDark:C.border}`, background:a?C.tealDark:'transparent', color:a?'#fff':C.textDim, transition:'all 0.12s' }),
+    sl:     { width:'100%', accentColor:C.teal, cursor:'pointer', margin:'4px 0' },
+    lbl:    { display:'flex', justifyContent:'space-between', fontSize:13, color:C.textMid, marginBottom:3 },
+    lv:     { fontWeight:700, color:C.text },
+    tog:    (on) => ({ width:36, height:20, borderRadius:10, background:on?C.tealDark:C.surface2, position:'relative', cursor:'pointer', border:`1px solid ${C.border}`, transition:'background 0.2s', flexShrink:0 }),
     tk:     (on) => ({ position:'absolute', top:2, left:on?18:2, width:14, height:14, borderRadius:'50%', background:'#fff', transition:'left 0.2s' }),
-    stG:    { display:'grid', gridTemplateColumns:'1fr 1fr', gap:5 },
-    stC:    { background:'#0a1620', border:`1px solid ${C.border}`, borderRadius:6, padding:'8px 9px' },
-    sL:     { fontSize:9, color:C.textDim, textTransform:'uppercase', letterSpacing:'0.4px' },
-    sV:     (c) => ({ fontSize:20, fontWeight:800, color:c||C.teal, lineHeight:1.1 }),
-    sS:     { fontSize:9, color:C.textDim },
+    tR:     { display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 },
+    // ── KPI tiles ──────────────────────────────────────────────────────
+    stG:    { display:'grid', gridTemplateColumns:'1fr 1fr', gap:1, background:C.border, borderRadius:8, overflow:'hidden' },
+    stC:    { background:C.panelBg, padding:'12px 14px' },
+    sL:     { fontSize:11, color:C.textDim, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 },
+    sV:     (c) => ({ fontSize:22, fontWeight:800, color:c||C.teal, lineHeight:1.1, fontVariantNumeric:'tabular-nums' }),
+    sS:     { fontSize:11, color:C.textDim, marginTop:2 },
+    // ── Kaartarea ──────────────────────────────────────────────────────
     mArea:  { flex:1, display:'flex', flexDirection:'column', position:'relative' },
-    mHdr:   { height:46, background:C.panelBg, borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 16px', flexShrink:0 },
-    ov:     { position:'absolute', top:10, right:10, width:250, background:C.panelBg, border:`1px solid ${C.border}`, borderRadius:9, padding:'12px', zIndex:500, boxShadow:'0 8px 24px rgba(0,0,0,0.4)' },
-    dpR:    { display:'flex', justifyContent:'space-between', fontSize:11, padding:'3px 7px', background:'#0a1620', borderRadius:4, marginBottom:3 },
-    legB:   { position:'absolute', bottom:200, left:12, background:C.panelBg+'ee', border:`1px solid ${C.border}`, borderRadius:7, padding:'8px 11px', zIndex:500 },
-    legI:   { display:'flex', alignItems:'center', gap:6, fontSize:10, color:C.textDim, marginBottom:3 },
+    ov:     { position:'absolute', top:10, right:10, width:260, background:C.panelBg, border:`1px solid ${C.border}`, borderRadius:9, padding:'12px', zIndex:500, boxShadow:'0 8px 24px rgba(0,0,0,0.4)' },
+    dpR:    { display:'flex', justifyContent:'space-between', fontSize:12, padding:'4px 8px', background:C.surface2, borderRadius:4, marginBottom:3 },
+    legB:   { position:'absolute', bottom:196, left:12, background:C.panelBg+'ee', border:`1px solid ${C.border}`, borderRadius:7, padding:'10px 13px', zIndex:500 },
+    legI:   { display:'flex', alignItems:'center', gap:8, fontSize:13, color:C.textMid, marginBottom:5 },
     chart:  { height:185, background:C.panelBg, borderTop:`1px solid ${C.border}`, padding:'10px 14px', flexShrink:0 },
     cTabs:  { display:'flex', gap:7, marginBottom:8 },
-    cTab:   (a) => ({ fontSize:11, fontWeight:700, padding:'3px 9px', borderRadius:5, cursor:'pointer', border:`1px solid ${a?C.tealDark:C.border}`, background:a?C.tealDark:'transparent', color:a?'#fff':C.textDim }),
-    errBnr: { background:'#2a0a0a', border:`1px solid ${C.warn}`, borderRadius:5, padding:'6px 10px', fontSize:10, color:C.warn, margin:'6px 16px' },
-    savBnr: { background:'#0a2a1a', border:`1px solid ${C.darkGreen}`, borderRadius:5, padding:'6px 10px', fontSize:10, color:C.green, margin:'6px 16px' },
+    cTab:   (a) => ({ fontSize:12, fontWeight:700, padding:'4px 10px', borderRadius:5, cursor:'pointer', border:`1px solid ${a?C.tealDark:C.border}`, background:a?C.tealDark:'transparent', color:a?'#fff':C.textDim }),
+    // ── Wijkpagina ─────────────────────────────────────────────────────
+    wPage:  { flex:1, overflowY:'auto', padding:'24px', display:'flex', gap:20, alignItems:'start' },
+    wList:  { display:'flex', flexDirection:'column', gap:10, width:380, flexShrink:0 },
+    wCard:  (a) => ({ border:`1px solid ${a?C.teal:C.border}`, borderRadius:12, padding:'16px 18px', cursor:'pointer', transition:'border-color 0.15s', background:a?'rgba(78,205,196,0.05)':C.panelBg }),
+    wNaam:  { fontSize:16, fontWeight:700, color:C.text, marginBottom:3 },
+    wType:  { fontSize:12, color:C.textDim, marginBottom:10 },
+    wStats: { display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8 },
+    wStat:  { background:C.surface2, borderRadius:6, padding:'8px 6px', textAlign:'center' },
+    wSV:    (c) => ({ fontSize:15, fontWeight:700, color:c||C.text, fontVariantNumeric:'tabular-nums' }),
+    wSL:    { fontSize:10, color:C.textDim, textTransform:'uppercase', letterSpacing:'0.05em', marginTop:2 },
+    wBar:   { height:3, borderRadius:2, marginTop:10, background:C.surface2, overflow:'hidden' },
+    urgBadge:(kleur) => ({ padding:'3px 10px', borderRadius:20, fontSize:12, fontWeight:600, background:`${kleur}18`, color:kleur, border:`1px solid ${kleur}44`, flexShrink:0 }),
+    // ── Detail paneel (wijken) ──────────────────────────────────────────
+    dPanel: { flex:1, background:C.panelBg, border:`1px solid ${C.border}`, borderRadius:12, overflow:'hidden' },
+    dHdr:   { padding:'20px 24px', borderBottom:`1px solid ${C.border}` },
+    dNaam:  { fontSize:20, fontWeight:700, color:C.text, marginBottom:4 },
+    dMeta:  { fontSize:13, color:C.textDim },
+    dKpis:  { display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:1, background:C.border, borderBottom:`1px solid ${C.border}` },
+    dKpi:   { background:C.panelBg, padding:'14px 20px' },
+    dKL:    { fontSize:11, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:C.textDim, marginBottom:4 },
+    dKV:    (c) => ({ fontSize:22, fontWeight:700, color:c||C.text, fontVariantNumeric:'tabular-nums' }),
+    dKS:    { fontSize:12, color:C.textDim, marginTop:2 },
+    dBody:  { padding:'20px 24px' },
+    dSecL:  { fontSize:11, fontWeight:600, letterSpacing:'0.08em', textTransform:'uppercase', color:C.textDim, marginBottom:10 },
+    dRow:   { display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:10 },
+    dRL:    { fontSize:13, color:C.textMid },
+    dRV:    { fontSize:14, fontWeight:600, color:C.text, fontVariantNumeric:'tabular-nums' },
+    dDiv:   { border:'none', borderTop:`1px solid ${C.border}`, margin:'14px 0' },
+    // ── Banners ────────────────────────────────────────────────────────
+    errBnr: { background:'rgba(224,92,92,0.1)', border:`1px solid ${C.red}`, borderRadius:5, padding:'6px 10px', fontSize:12, color:C.red, margin:'6px 16px' },
+    savBnr: { background:'rgba(78,205,196,0.1)', border:`1px solid ${C.teal}`, borderRadius:5, padding:'6px 10px', fontSize:12, color:C.teal, margin:'6px 16px' },
     delModal:{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:3000, display:'flex', alignItems:'center', justifyContent:'center' },
     delBox:  { background:C.panelBg, border:`1px solid ${C.border}`, borderRadius:10, padding:'24px', width:320, boxShadow:'0 16px 48px rgba(0,0,0,0.5)' },
+    surface2: C.surface2,
   };
+
+
+  // ── Wijkpagina helpers ─────────────────────────────────────────────
+  const urgentieKleur = (delta) => delta > 30 ? '#E05C5C' : delta > 15 ? '#E8963A' : '#4ECDC4';
+  const urgentieLabel = (delta) => delta > 30 ? 'Hoge prioriteit' : delta > 15 ? 'Middel prioriteit' : 'Lage prioriteit';
+  const geselecteerdeWijkResult = selectedWijkDetail
+    ? wijkResults.find(r => r.wijk.id === selectedWijkDetail)
+    : (wijkResults.length ? wijkResults.slice().sort((a,b) => b.data.deltaTotaal - a.data.deltaTotaal)[0] : null);
 
   const STANDAARD_IDS = ['leuven','olen','gent'];
 
@@ -678,7 +726,7 @@ export default function AppWithOnboarding() {
       <style>{`
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
         ::-webkit-scrollbar{width:4px}
-        ::-webkit-scrollbar-thumb{background:#1e3a46;border-radius:2px}
+        ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:2px}
         .belli-tooltip { background: white; border: 1px solid #ddd; border-radius: 8px; padding: 8px 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
         .belli-tooltip::before { display: none; }
         .leaflet-tooltip.belli-tooltip { white-space: normal; }
@@ -691,6 +739,19 @@ export default function AppWithOnboarding() {
           saving={saving} />
       )}
 
+      {/* TOPBAR */}
+      <div style={st.topbar}>
+        <button style={st.tbBack} onClick={() => setShowDashboard(true)}>
+          ← Alle gemeenten
+        </button>
+        <div style={st.tbGem}>{gemeente?.naam}</div>
+        <div style={st.tbMeta}>{gemeente?.inwoners?.toLocaleString('nl-NL')} inwoners · {gemeente?.wijken?.length || '…'} wijken</div>
+        <div style={st.dbBadge(dbStatus)}>
+          <span style={st.dbDot(dbStatus)}/>
+          DB {dbStatus}
+        </div>
+      </div>
+
       {showOverzicht && (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:2000,display:'flex',alignItems:'center',justifyContent:'center'}}
           onClick={e=>e.target===e.currentTarget&&setShowOverzicht(false)}>
@@ -702,7 +763,7 @@ export default function AppWithOnboarding() {
             <div style={{overflowY:'auto',flex:1}}>
               <table style={{width:'100%',borderCollapse:'collapse',fontSize:11}}>
                 <thead>
-                  <tr style={{background:'#0a1620',position:'sticky',top:0}}>
+                  <tr style={{background:C.surface2||'#222839',position:'sticky',top:0}}>
                     {['Wijk','Bij te plaatsen LP','Energievraag MWh/jr','CAPEX indicatief','Prioriteit'].map(h=>(
                       <th key={h} style={{padding:'10px 14px',textAlign:'left',color:C.textMid,fontWeight:700,borderBottom:`1px solid ${C.border}`}}>{h}</th>
                     ))}
@@ -717,7 +778,7 @@ export default function AppWithOnboarding() {
                       capex: data.capex,
                     }));
                     return rijen.sort((a,b)=>b.lp-a.lp).map((r,i)=>(
-                      <tr key={i} style={{borderBottom:`1px solid ${C.border}`,background:i%2===0?'#0a1620':C.panelBg}}>
+                      <tr key={i} style={{borderBottom:`1px solid ${C.border}`,background:i%2===0?(C.surface2||'#222839'):C.panelBg}}>
                         <td style={{padding:'8px 14px',color:C.text,fontWeight:500}}>{r.naam}</td>
                         <td style={{padding:'8px 14px',color:C.teal,fontWeight:700,textAlign:'right'}}>{Math.ceil(r.lp)}</td>
                         <td style={{padding:'8px 14px',color:C.textMid,textAlign:'right'}}>{r.mwh}</td>
@@ -760,59 +821,32 @@ export default function AppWithOnboarding() {
         </div>
       )}
 
+      {/* BODY: sidebar + content */}
+      <div style={st.body}>
+
       {/* SIDEBAR */}
       <div style={st.side}>
-        <div style={st.logo}>
-          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-            <button
-              onClick={() => setShowDashboard(true)}
-              style={{ background:'none', border:'none', cursor:'pointer', color:C.textMid, fontSize:11, display:'flex', alignItems:'center', gap:4, padding:0 }}
-              title="Terug naar alle gemeenten"
-            >
-              ← Alle gemeenten
-            </button>
-          </div>
-          <span style={st.dbBadge(dbStatus)}>
-            {dbStatus==='online'?'● DB online':dbStatus==='offline'?'● DB offline':'● laden'}
-          </span>
-        </div>
-
         {apiError && <div style={st.errBnr}>⚠ {apiError}</div>}
         {saving   && <div style={st.savBnr}>Opslaan in database…</div>}
 
         <div style={st.scroll}>
 
-          {/* Gemeente selector */}
+          {/* Navigatie */}
           <div style={st.sec}>
-            <div style={st.sHdr}>Gemeente</div>
-            <div style={st.sBody}>
-              <div style={st.gemWrap}>
-                {Object.values(gemeenten).map(g => (
-                  <div key={g.id} style={st.gemBtn(gemId===g.id, g.kleur||C.tealDark)}
-                    onClick={() => setGemId(g.id)}>{g.naam}</div>
-                ))}
-                <div style={st.addBtn} onClick={() => setShowOnboarding(true)}>+ Nieuw</div>
-              </div>
-
-              {/* Verwijder knop voor niet-standaard gemeenten */}
-              <div style={{ display:'flex', gap:10, marginTop:4 }}>
-                <div style={{ fontSize:10, color:C.teal, cursor:'pointer' }}
-                  onClick={() => setShowEditor(true)}>
-                  ✎ Bewerken
-                </div>
-                {!STANDAARD_IDS.includes(gemId) && (
-                  <div style={{ fontSize:10, color:C.warn, cursor:'pointer' }}
-                    onClick={() => setShowDelete(true)}>
-                    ✕ Verwijderen
-                  </div>
-                )}
-              </div>
-
-              <div style={{ fontSize:10, color:C.textDim, marginTop:4 }}>
-                {gemeente?.inwoners?.toLocaleString('nl-NL')} inwoners ·{' '}
-                {gemeente?.wijken?.length || '…'} wijken
-                {dbStatus==='offline' && <span style={{color:C.gold}}> · lokaal</span>}
-              </div>
+            <div style={st.sHdr}>Analyse</div>
+            <div style={st.navItem(!showWijken)} onClick={() => setShowWijken(false)}>
+              <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/>
+                <rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/>
+              </svg>
+              Overzicht
+            </div>
+            <div style={st.navItem(showWijken)} onClick={() => setShowWijken(true)}>
+              <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <rect x="1" y="8" width="6" height="7" rx="1"/><rect x="9" y="4" width="6" height="11" rx="1"/>
+                <rect x="1" y="1" width="6" height="5" rx="1"/>
+              </svg>
+              Stadsdelen
             </div>
           </div>
 
@@ -836,34 +870,29 @@ export default function AppWithOnboarding() {
           <div style={st.sec}>
             <div style={st.sHdr}>Parameters</div>
             <div style={st.sBody}>
-              <div style={{ marginBottom:10 }}>
+              <div style={{ marginBottom:12 }}>
                 <div style={st.lbl}><span>Privé %</span><span style={st.lv}>{((wijkResults[0]?.data.privePct||0)*100).toFixed(0)}%</span></div>
                 <div style={st.lbl}><span>Publiek + semi-publiek %</span><span style={st.lv}>{(100-(wijkResults[0]?.data.privePct||0)*100).toFixed(0)}%</span></div>
                 <input type="range" style={st.sl} min={0} max={100} step={1}
                   value={Math.round((privePctOverride ?? gemeente?.privePctBerekend ?? 0.5)*100)}
                   onChange={e=>setPrivePctOverride(+e.target.value/100)}/>
                 {privePctOverride != null && (
-                  <div style={{fontSize:11,color:C.muted,cursor:'pointer',marginTop:4}}
+                  <div style={{fontSize:12,color:C.textDim,cursor:'pointer',marginTop:4}}
                     onClick={()=>setPrivePctOverride(null)}>↺ reset naar berekend ({Math.round((gemeente?.privePctBerekend||0)*100)}%)</div>
                 )}
               </div>
-              <div style={{ marginBottom:10 }}>
+              <div style={{ marginBottom:12 }}>
                 <div style={st.lbl}><span>Redundantiemarge</span><span style={st.lv}>{Math.round(redundantieMarge*100)}%</span></div>
                 <input type="range" style={st.sl} min={0} max={30} step={1} value={Math.round(redundantieMarge*100)} onChange={e=>setRedundantieMarge(+e.target.value/100)}/>
               </div>
               <div>
                 <div style={st.lbl}><span>Gepland te installeren (AC)</span></div>
                 <input
-                  type="number"
-                  min={0}
+                  type="number" min={0}
                   value={huidigLP === 0 ? '' : huidigLP}
                   placeholder="0"
                   onChange={e => setHuidigLP(e.target.value === '' ? 0 : Math.max(0, +e.target.value))}
-                  style={{
-                    width:'100%', boxSizing:'border-box', padding:'6px 10px',
-                    background:C.darkBg, border:`1px solid ${C.border}`, borderRadius:6,
-                    color:C.text, fontSize:13, fontWeight:700,
-                  }}
+                  style={{ width:'100%', boxSizing:'border-box', padding:'8px 10px', background:C.surface2, border:`1px solid ${C.border}`, borderRadius:6, color:C.text, fontSize:14, fontWeight:700 }}
                 />
               </div>
             </div>
@@ -873,16 +902,14 @@ export default function AppWithOnboarding() {
           <div style={st.sec}>
             <div style={st.sHdr}>Trendscenario's</div>
             <div style={st.sBody}>
-              {[['slim','Slim laden']].map(([t,l])=>(
-                <div key={t} style={st.tR}>
-                  <span style={{fontSize:11,color:C.textMid}}>{l}</span>
-                  <div style={st.tog(trends[t])} onClick={()=>setTrends(s=>({...s,[t]:!s[t]}))}>
-                    <div style={st.tk(trends[t])}/>
-                  </div>
+              <div style={st.tR}>
+                <span style={{fontSize:14,color:C.textMid}}>Slim laden</span>
+                <div style={st.tog(trends.slim)} onClick={()=>setTrends(s=>({...s,slim:!s.slim}))}>
+                  <div style={st.tk(trends.slim)}/>
                 </div>
-              ))}
+              </div>
               {trends.slim && (
-                <div style={{fontSize:10,color:C.textDim}}>Ruimte voor extra laadpunten, obv 40% piekreductie (E-Laad studie).</div>
+                <div style={{fontSize:12,color:C.textDim}}>Ruimte voor extra laadpunten, obv 40% piekreductie (E-Laad studie).</div>
               )}
             </div>
           </div>
@@ -907,28 +934,141 @@ export default function AppWithOnboarding() {
             </div>
           </div>
 
+          {/* Gemeente beheer */}
+          <div style={st.sec}>
+            <div style={st.sHdr}>Beheer</div>
+            <div style={st.sBody}>
+              <div style={{display:'flex', gap:12}}>
+                <div style={{fontSize:13,color:C.teal,cursor:'pointer'}} onClick={() => setShowEditor(true)}>✎ Bewerken</div>
+                {!STANDAARD_IDS.includes(gemId) && (
+                  <div style={{fontSize:13,color:C.warn,cursor:'pointer'}} onClick={() => setShowDelete(true)}>✕ Verwijderen</div>
+                )}
+              </div>
+              {dbStatus==='offline' && <div style={{fontSize:12,color:C.gold,marginTop:6}}>Lokale modus</div>}
+            </div>
+          </div>
+
         </div>
       </div>
 
+      {/* WIJKPAGINA */}
+      {showWijken && (
+        <div style={st.wPage}>
+          <div style={st.wList}>
+            {wijkResults
+              .slice()
+              .sort((a,b) => b.data.deltaTotaal - a.data.deltaTotaal)
+              .map(({wijk, data}) => {
+                const kleur = urgentieKleur(data.deltaTotaal);
+                const actief = (selectedWijkDetail || geselecteerdeWijkResult?.wijk?.id) === wijk.id;
+                const maxDelta = Math.max(...wijkResults.map(r => r.data.deltaTotaal));
+                return (
+                  <div key={wijk.id} style={st.wCard(actief)} onClick={() => setSelectedWijkDetail(wijk.id)}>
+                    <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:10}}>
+                      <div>
+                        <div style={st.wNaam}>{wijk.naam}</div>
+                        <div style={st.wType}>{Array.isArray(wijk.wijktype) ? wijk.wijktype.join(' + ') : wijk.wijktype || 'woonwijk'}</div>
+                      </div>
+                      <div style={st.urgBadge(kleur)}>{urgentieLabel(data.deltaTotaal)}</div>
+                    </div>
+                    <div style={st.wStats}>
+                      <div style={st.wStat}>
+                        <div style={st.wSV(kleur)}>{Math.ceil(data.deltaTotaal)}</div>
+                        <div style={st.wSL}>LP nodig</div>
+                      </div>
+                      <div style={st.wStat}>
+                        <div style={st.wSV()}>{Math.round(data.totMwh)}</div>
+                        <div style={st.wSL}>MWh/j</div>
+                      </div>
+                      <div style={st.wStat}>
+                        <div style={st.wSV(kleur)}>{fmtEur(data.capex)}</div>
+                        <div style={st.wSL}>CAPEX</div>
+                      </div>
+                    </div>
+                    <div style={st.wBar}>
+                      <div style={{height:'100%',borderRadius:2,background:kleur,width:`${maxDelta>0?Math.min(100,(data.deltaTotaal/maxDelta)*100):0}%`}}/>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+
+          {/* Detail paneel */}
+          {geselecteerdeWijkResult && (() => {
+            const {wijk, data} = geselecteerdeWijkResult;
+            const kleur = urgentieKleur(data.deltaTotaal);
+            return (
+              <div style={st.dPanel}>
+                <div style={st.dHdr}>
+                  <div style={st.dNaam}>{wijk.naam}</div>
+                  <div style={st.dMeta}>
+                    {Array.isArray(wijk.wijktype) ? wijk.wijktype.join(' + ') : wijk.wijktype || 'woonwijk'}
+                    {wijk.inwoners ? ` · ${wijk.inwoners.toLocaleString('nl-NL')} inwoners` : ''}
+                    {wijk.voertuigen ? ` · ${wijk.voertuigen.toLocaleString('nl-NL')} voertuigen` : ''}
+                  </div>
+                </div>
+                <div style={st.dKpis}>
+                  {[
+                    ['LP nodig 2030', Math.ceil(data.totLP), null, 'bruto'],
+                    ['Bijkomend',     Math.ceil(data.deltaTotaal), kleur, 't.o.v. huidig'],
+                    ['MWh / jaar',    Math.round(data.totMwh), null, 'publieke laadvraag'],
+                    ['CAPEX',         fmtEur(data.capex), kleur, 'indicatief'],
+                  ].map(([l,v,c,s]) => (
+                    <div key={l} style={st.dKpi}>
+                      <div style={st.dKL}>{l}</div>
+                      <div style={st.dKV(c)}>{v}</div>
+                      <div style={st.dKS}>{s}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={st.dBody}>
+                  <div style={st.dSecL}>Laadtypes</div>
+                  {[
+                    ['AC (energiebehoefte)', Math.round(data.totAC)],
+                    ['AC aanwezig (gewogen)', data.bestaand.AC.toFixed(1)],
+                    ['AC bijkomend', data.delta.AC.toFixed(1)],
+                    ...(trends.slim ? [['Ruimte slim laden', `+${Math.round(slimLadenExtraRuimte(data.bestaand.AC))} AC-sockets`]] : []),
+                    ['DC nodig / aanwezig / bij', `${Math.round(data.totDC)} / ${data.bestaand.DC.toFixed(1)} / ${data.delta.DC.toFixed(1)}`],
+                    ['HPC nodig / aanwezig / bij', `${Math.round(data.totHPC)} / ${data.bestaand.HPC.toFixed(1)} / ${data.delta.HPC.toFixed(1)}`],
+                  ].map(([l,v]) => (
+                    <div key={l} style={st.dRow}>
+                      <span style={st.dRL}>{l}</span>
+                      <span style={st.dRV}>{v}</span>
+                    </div>
+                  ))}
+                  <hr style={st.dDiv}/>
+                  <div style={st.dSecL}>Parameters</div>
+                  {[
+                    ['EV-aandeel ' + year, `${((data.evPct||0)*100).toFixed(1)}%`],
+                    ['Privé %', `${((data.privePct||0)*100).toFixed(0)}%`],
+                    ['Dekking 250m-norm', `${Math.round(data.dekkingAC)} LP${data.dekkingLigtHoger ? ' (hoger dan behoefte)' : ''}`],
+                  ].map(([l,v]) => (
+                    <div key={l} style={st.dRow}>
+                      <span style={st.dRL}>{l}</span>
+                      <span style={st.dRV}>{v}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
       {/* KAART AREA */}
-      <div style={st.mArea}>
-        <div style={st.mHdr}>
-          <div style={{fontSize:13,fontWeight:700}}>{gemeente?.naam} · {year}</div>
-          <div style={{fontSize:11,color:C.textDim}}>
-            <span style={{width:7,height:7,borderRadius:'50%',background:'#4CAF50',display:'inline-block',marginRight:5,animation:'pulse 2s infinite'}}></span>
-            {loadingPalen?'Laden…':`${existingPalen.length} laadpunten op kaart (MOW)`}
-            &nbsp;·&nbsp;
-            <strong style={{color:C.teal}}>{(bestaandTotaalPerType.AC+bestaandTotaalPerType.DC+bestaandTotaalPerType.HPC).toFixed(0)} gewogen (Publiek + 50% semi-publiek)</strong>
-            <button onClick={() => setShowOverzicht(true)} style={{
-              marginLeft:12, padding:'3px 12px', borderRadius:5, fontSize:11,
-              fontWeight:700, cursor:'pointer', border:`1px solid ${C.tealDark}`,
-              background:C.tealDark, color:'#fff',
-            }}>Wijkoverzicht</button>
-            {ongematcht > 0 && (
-              <span style={{marginLeft:12, color:C.gold, fontSize:11}}>
-                ⚠ {ongematcht} laadpunten zonder wijkkoppeling
-              </span>
-            )}
+      <div style={{...st.mArea, display: showWijken ? 'none' : 'flex'}}>
+        <div style={{height:46,background:C.panelBg,borderBottom:`1px solid ${C.border}`,display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 16px',flexShrink:0}}>
+          <div style={{fontSize:14,fontWeight:700,color:C.text}}>{gemeente?.naam} · {year}</div>
+          <div style={{fontSize:12,color:C.textDim,display:'flex',alignItems:'center',gap:12}}>
+            <span>
+              <span style={{width:7,height:7,borderRadius:'50%',background:'#4CAF50',display:'inline-block',marginRight:5,animation:'pulse 2s infinite'}}/>
+              {loadingPalen?'Laden…':`${existingPalen.length} laadpunten (MOW)`}
+            </span>
+            <strong style={{color:C.teal}}>{(bestaandTotaalPerType.AC+bestaandTotaalPerType.DC+bestaandTotaalPerType.HPC).toFixed(0)} gewogen</strong>
+            <button onClick={() => setShowOverzicht(true)} style={{padding:'4px 12px',borderRadius:5,fontSize:12,fontWeight:700,cursor:'pointer',border:`1px solid ${C.tealDark}`,background:C.tealDark,color:'#fff'}}>
+              Wijkoverzicht
+            </button>
+            {ongematcht > 0 && <span style={{color:C.gold}}>⚠ {ongematcht} zonder koppeling</span>}
           </div>
         </div>
 
@@ -994,7 +1134,7 @@ export default function AppWithOnboarding() {
           <ResponsiveContainer width="100%" height={128}>
             {chartTab==='mwh'?(
               <LineChart data={tijdreeks} margin={{top:0,right:8,left:-24,bottom:0}}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e3a46"/>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)"/>
                 <XAxis dataKey="jaar" tick={{fill:C.textDim,fontSize:10}}/>
                 <YAxis tick={{fill:C.textDim,fontSize:10}}/>
                 <Tooltip contentStyle={{background:C.panelBg,border:`1px solid ${C.border}`,fontSize:11}}/>
@@ -1002,7 +1142,7 @@ export default function AppWithOnboarding() {
               </LineChart>
             ):chartTab==='capex'?(
               <BarChart data={tijdreeks.filter((_,i)=>i%2===0)} margin={{top:0,right:8,left:-24,bottom:0}}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e3a46"/>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)"/>
                 <XAxis dataKey="jaar" tick={{fill:C.textDim,fontSize:10}}/>
                 <YAxis tick={{fill:C.textDim,fontSize:10}}/>
                 <Tooltip contentStyle={{background:C.panelBg,border:`1px solid ${C.border}`,fontSize:11}}/>
@@ -1010,7 +1150,7 @@ export default function AppWithOnboarding() {
               </BarChart>
             ):(
               <LineChart data={tijdreeks} margin={{top:0,right:8,left:-24,bottom:0}}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e3a46"/>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)"/>
                 <XAxis dataKey="jaar" tick={{fill:C.textDim,fontSize:10}}/>
                 <YAxis tick={{fill:C.textDim,fontSize:10}}/>
                 <Tooltip contentStyle={{background:C.panelBg,border:`1px solid ${C.border}`,fontSize:11}}/>
@@ -1020,8 +1160,9 @@ export default function AppWithOnboarding() {
             )}
           </ResponsiveContainer>
         </div>
-      </div>
-    </div>
+      </div>{/* kaartarea */}
+      </div>{/* body */}
+    </div>{/* app */}
     </>
   );
 }
