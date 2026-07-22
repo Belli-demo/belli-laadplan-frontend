@@ -700,9 +700,12 @@ export default function AppWithOnboarding() {
   // ── Wijkpagina helpers ─────────────────────────────────────────────
   const urgentieKleur = (delta) => delta > 30 ? '#E05C5C' : delta > 15 ? '#E8963A' : '#4ECDC4';
   const urgentieLabel = (delta) => delta > 30 ? 'Hoge prioriteit' : delta > 15 ? 'Middel prioriteit' : 'Lage prioriteit';
+  // geselecteerdeWijkResult: altijd de door de gebruiker geklikte wijk (selectedWijkDetail).
+  // Als nog niets geklikt: toon de eerste wijk in de lijst (gesorteerd op naam, niet op delta),
+  // zodat de tijdlijn stabiel blijft als het jaar wisselt.
   const geselecteerdeWijkResult = selectedWijkDetail
     ? wijkResults.find(r => r.wijk.id === selectedWijkDetail)
-    : (wijkResults.length ? wijkResults.slice().sort((a,b) => b.data.deltaTotaal - a.data.deltaTotaal)[0] : null);
+    : (wijkResults.length ? wijkResults.slice().sort((a,b) => a.wijk.naam.localeCompare(b.wijk.naam, 'nl'))[0] : null);
 
   const STANDAARD_IDS = ['leuven','olen','gent'];
 
@@ -958,19 +961,22 @@ export default function AppWithOnboarding() {
             </div>
           </div>
 
-          {/* Gemeente beheer */}
-          <div style={st.sec}>
-            <div style={st.sHdr}>Beheer</div>
-            <div style={st.sBody}>
-              <div style={{display:'flex', gap:12}}>
-                <div style={{fontSize:13,color:C.teal,cursor:'pointer'}} onClick={() => setShowEditor(true)}>✎ Bewerken</div>
-                {!STANDAARD_IDS.includes(gemId) && (
-                  <div style={{fontSize:13,color:C.warn,cursor:'pointer'}} onClick={() => setShowDelete(true)}>✕ Verwijderen</div>
-                )}
-              </div>
-              {dbStatus==='offline' && <div style={{fontSize:12,color:C.gold,marginTop:6}}>Lokale modus</div>}
-            </div>
+          {/* Gemeente beheer: onder Stadsdelen-knop als nav-items */}
+          <div style={st.navItem(false)} onClick={() => setShowEditor(true)}>
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M11 2l3 3-8 8H3v-3l8-8z"/>
+            </svg>
+            Gemeente bewerken
           </div>
+          {!STANDAARD_IDS.includes(gemId) && (
+            <div style={{...st.navItem(false), color:C.warn}} onClick={() => setShowDelete(true)}>
+              <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <polyline points="3 6 13 6"/><path d="M5 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><rect x="3" y="6" width="10" height="9" rx="1"/>
+              </svg>
+              Verwijderen
+            </div>
+          )}
+          {dbStatus==='offline' && <div style={{fontSize:12,color:C.gold,padding:'6px 16px'}}>Lokale modus</div>}
 
         </div>
       </div>
