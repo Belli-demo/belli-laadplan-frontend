@@ -212,6 +212,12 @@ export default function GemeenteEditor({ gemeente, onSave, onClose }) {
                       <>
                         <br/>Daadwerkelijke installatiegraad nu: <strong style={{ color:C.teal }}>{Math.round(fluviusResultaat.voorgesteld*100)}%</strong>
                         {' '}({HUIDIG_JAAR}, geen 2030-prognose)
+                        <button
+                          style={{ marginLeft:10, padding:'2px 10px', borderRadius:4, fontSize:11, fontWeight:700, cursor:'pointer', border:`1px solid ${C.tealDark}`, background:C.tealDark, color:'#fff' }}
+                          onClick={() => setPrivePctBerekend(Math.round(fluviusResultaat.voorgesteld*100))}
+                        >
+                          ↑ Overnemen als privé%
+                        </button>
                         <div style={{ color:C.gold, marginTop:4 }}>
                           Let op: dit meet iets anders dan het privé%-veld hierboven (garage/oprit-mogelijkheid volgens de
                           Stadsmonitor) en is bovendien een momentopname van {HUIDIG_JAAR}, geen projectie voor 2030. Niet
