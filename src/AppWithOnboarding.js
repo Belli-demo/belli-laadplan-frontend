@@ -520,7 +520,7 @@ export default function AppWithOnboarding() {
     // Faalt stil als postcodes ontbreken; V5 valt terug op gemeente?.privePctBerekend.
     try {
       const fj = await getFluviusPrive(gemId);
-      setFluviusFp(fj?.aantalPrive ?? fj?.totaal ?? null);
+      setFluviusFp(fj?.totaalPrivePunten ?? null);
     } catch (e) {
       setFluviusFp(null);
     }
