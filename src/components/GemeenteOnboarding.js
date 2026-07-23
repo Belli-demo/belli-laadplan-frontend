@@ -1,5 +1,4 @@
 import React, { useState, useCallback } from 'react';
-import { getBevolking } from '../api';
 
 // ── Kleuren ─────────────────────────────────────────────────────────
 const C = {
@@ -24,24 +23,55 @@ const STAPPEN = ['Gemeente zoeken', 'Wijken & Data', 'Wijktype', 'Bevestiging'];
 // ── API calls ────────────────────────────────────────────────────────
 
 // Nominatim: gemeente → center, bbox, NIS-code
-async function fetchNominatim(naam, land) {
-  const q = encodeURIComponent(`${naam}, ${land}`);
-  const url = `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=3&addressdetails=1&countrycodes=${land === 'België' ? 'be' : 'nl'}`;
+// Robuuste versie: retry bij falen (Nominatim heeft rate-limit 1/sec + soms
+// tijdelijke uitval). Fallback: probeer zonder land-suffix als eerste poging
+// niets oplevert.
+async function fetchNominatimSingle(query, land) {
+  const q = encodeURIComponent(query);
+  const url = `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=5&addressdetails=1&countrycodes=${land === 'België' ? 'be' : 'nl'}`;
   const resp = await fetch(url, { headers:{ 'User-Agent':'Belli-Laadkaart/1.0 (info@belli.eu)' } });
-  if (!resp.ok) throw new Error('Nominatim niet beschikbaar');
+  if (!resp.ok) {
+    const err = new Error(`Nominatim HTTP ${resp.status}`);
+    err.retryable = resp.status === 429 || resp.status >= 500;
+    throw err;
+  }
   const data = await resp.json();
-  // Filter op municipality/city
-  const match = data.find(d => ['municipality','city','town','village'].includes(d.type) || d.class === 'boundary')
-    || data[0];
-  if (!match) throw new Error(`Gemeente "${naam}" niet gevonden`);
-  const bb = match.boundingbox; // [south, north, west, east]
-  return {
-    center: [parseFloat(match.lat), parseFloat(match.lon)],
-    bbox:   [parseFloat(bb[0]), parseFloat(bb[2]), parseFloat(bb[1]), parseFloat(bb[3])],
-    displayName: match.display_name.split(',').slice(0,2).join(', '),
-    osmId: match.osm_id,
-    type:  match.type,
-  };
+  return data;
+}
+
+async function fetchNominatim(naam, land) {
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  const queries = [`${naam}, ${land}`, naam]; // eerst met land, dan zonder
+  let laatsteFout = null;
+
+  for (const query of queries) {
+    for (let poging = 0; poging < 3; poging++) {
+      try {
+        const data = await fetchNominatimSingle(query, land);
+        // Filter op municipality/city/town/village en boundary
+        const match = data.find(d => ['municipality','city','town','village'].includes(d.type) || d.class === 'boundary')
+          || data[0];
+        if (match) {
+          const bb = match.boundingbox; // [south, north, west, east]
+          return {
+            center: [parseFloat(match.lat), parseFloat(match.lon)],
+            bbox:   [parseFloat(bb[0]), parseFloat(bb[2]), parseFloat(bb[1]), parseFloat(bb[3])],
+            displayName: match.display_name.split(',').slice(0,2).join(', '),
+            osmId: match.osm_id,
+            type:  match.type,
+          };
+        }
+        break; // geen match voor deze query, probeer volgende query
+      } catch (e) {
+        laatsteFout = e;
+        if (!e.retryable) break; // niet-retryable fout, ga naar volgende query
+        await sleep(1500); // wacht voor rate-limit
+      }
+    }
+  }
+
+  if (laatsteFout) throw new Error(`Nominatim onbereikbaar (${laatsteFout.message}). Probeer opnieuw over 10-20 seconden.`);
+  throw new Error(`Gemeente "${naam}" niet gevonden in OpenStreetMap. Controleer de spelling.`);
 }
 
 // Oppervlakte (km2) van een polygoon obv lat/lon-coördinaten, met een lokale
@@ -104,7 +134,7 @@ out geom;`;
 // de oude, foutief als "Bron: Statbel" gelabelde gok (oppervlakte × dichtheid).
 // Filtert op P17=Q31 (land = België) om verwarring met gelijknamige plaatsen
 // elders te voorkomen (bijv. Hasselt bestaat ook als buurtnaam in Nederland).
-async function fetchGemeenteBevolkingWikidata(naam) {
+async function fetchGemeenteBevolking(naam) {
   try {
     const zoekUrl = `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(naam)}&language=nl&format=json&type=item&origin=*&limit=5`;
     const zoekResp = await fetch(zoekUrl);
@@ -113,7 +143,7 @@ async function fetchGemeenteBevolkingWikidata(naam) {
     if (!zoekData.search?.length) return null;
 
     for (const kandidaat of zoekData.search) {
-      const entityUrl = `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${kandidaat.id}&format=json&origin=*&props=claims`;
+      const entityUrl = `https://www.wikidata.org/wiki/Special:EntityData/${kandidaat.id}.json`;
       const entityResp = await fetch(entityUrl);
       if (!entityResp.ok) continue;
       const entityData = await entityResp.json();
@@ -130,21 +160,8 @@ async function fetchGemeenteBevolkingWikidata(naam) {
       const aantal = meestRecent?.waarde ?? bevolkingClaims[0].mainsnak?.datavalue?.value?.amount;
       if (aantal) return Math.abs(parseInt(aantal));
     }
-  } catch { /* stil falen, aanroeper valt terug op Wikidata of de oude schatting */ }
+  } catch { /* stil falen, aanroeper valt terug op de oude schatting */ }
   return null;
-}
-
-// Primaire bron: onze eigen backend, die het landelijke Rijksregister-
-// bestand server-naar-server ophaalt en cachet (geen CORS-risico, want
-// dit is een eigen-domein-aanroep). Wikidata blijft als terugvaloptie
-// staan voor het geval de cache nog leeg is (bijv. vóór de eerste
-// /geo/ververs-bevolking-aanroep).
-async function fetchGemeenteBevolking(naam) {
-  try {
-    const r = await getBevolking(naam);
-    if (r?.inwoners) return r.inwoners;
-  } catch { /* nog niet in de cache, val terug op Wikidata */ }
-  return fetchGemeenteBevolkingWikidata(naam);
 }
 
 // Overpass: haal deelgemeenten/wijken op, mét grenzen waar beschikbaar
@@ -478,7 +495,7 @@ export default function GemeenteOnboarding({ onComplete, onClose }) {
                   {inwonersIsSchatting ? (
                     <div style={{...s.hint, color:C.warn}}>⚠ Ruwe schatting (oppervlakte × aangenomen dichtheid): Wikidata-opzoeking is niet gelukt. Controleer en corrigeer dit handmatig, bijvoorbeeld via Statbel of AlleCijfers.be.</div>
                   ) : (
-                    <div style={{...s.hint, color:C.darkGreen}}>✓ Rijksregister (of Wikidata als terugvaloptie)</div>
+                    <div style={{...s.hint, color:C.darkGreen}}>✓ Wikidata (meest recente bevolkingsopgave)</div>
                   )}
                 </div>
                 <div style={s.row}>
