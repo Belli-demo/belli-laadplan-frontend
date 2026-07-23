@@ -7,7 +7,8 @@
 //   onStartOnboarding()     — callback bij klik op "Gemeente onboarden"
 //   onVerversGemeenten()    — optionele callback om lijst te herfetchen
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { getGemeentenLijst } from './api';
 
 // ── Kleurpalet: identiek aan de rest van de app ────────────────────────────
 const C = {
@@ -34,7 +35,10 @@ const VLAAMSE_GEMEENTEN = [
   { naam: 'Aalter',       provincie: 'Oost-Vlaanderen',  nis: '44084' },
   { naam: 'Aarschot',     provincie: 'Vlaams-Brabant',   nis: '24002' },
   { naam: 'Antwerpen',    provincie: 'Antwerpen',         nis: '11002' },
+  { naam: 'Beveren',      provincie: 'Oost-Vlaanderen',  nis: '46003' },
+  { naam: 'Bonheiden',    provincie: 'Antwerpen',         nis: '12005' },
   { naam: 'Boom',         provincie: 'Antwerpen',         nis: '11005' },
+  { naam: 'Brasschaat',   provincie: 'Antwerpen',         nis: '11008' },
   { naam: 'Brugge',       provincie: 'West-Vlaanderen',  nis: '31005' },
   { naam: 'Dendermonde',  provincie: 'Oost-Vlaanderen',  nis: '42006' },
   { naam: 'Diest',        provincie: 'Vlaams-Brabant',   nis: '24020' },
@@ -42,6 +46,7 @@ const VLAAMSE_GEMEENTEN = [
   { naam: 'Genk',         provincie: 'Limburg',           nis: '71016' },
   { naam: 'Hasselt',      provincie: 'Limburg',           nis: '71022' },
   { naam: 'Heist-op-den-Berg', provincie: 'Antwerpen',   nis: '12014' },
+  { naam: 'Knokke-Heist', provincie: 'West-Vlaanderen',  nis: '31043' },
   { naam: 'Kortrijk',     provincie: 'West-Vlaanderen',  nis: '34022' },
   { naam: 'Leuven',       provincie: 'Vlaams-Brabant',   nis: '24062' },
   { naam: 'Mechelen',     provincie: 'Antwerpen',         nis: '12025' },
@@ -54,6 +59,7 @@ const VLAAMSE_GEMEENTEN = [
   { naam: 'Sint-Truiden', provincie: 'Limburg',           nis: '71053' },
   { naam: 'Temse',        provincie: 'Oost-Vlaanderen',  nis: '46025' },
   { naam: 'Turnhout',     provincie: 'Antwerpen',         nis: '13040' },
+  { naam: 'Vilvoorde',    provincie: 'Vlaams-Brabant',   nis: '23088' },
   { naam: 'Waregem',      provincie: 'West-Vlaanderen',  nis: '34040' },
 ];
 
@@ -377,6 +383,18 @@ export default function Dashboard({ gemeenten = {}, dbStatus = 'laden', onSelect
   const [land, setLand] = useState('BE');
   const [zoekTekst, setZoekTekst] = useState('');
   const [geselecteerdMatch, setGeselecteerdMatch] = useState(null);
+  // Dynamische Vlaamse-gemeentenlijst uit backend (nis-lookup.js, ~300).
+  // Bij pagina-load eenmalig opgehaald. Faalt de call, dan valt de zoekbalk
+  // terug op de statische VLAAMSE_GEMEENTEN shortlist hierboven.
+  const [dynVlaamseGemeenten, setDynVlaamseGemeenten] = useState(null);
+
+  useEffect(() => {
+    let actief = true;
+    getGemeentenLijst('België')
+      .then(d => { if (actief && Array.isArray(d?.gemeenten)) setDynVlaamseGemeenten(d.gemeenten); })
+      .catch(() => { /* stil: fallback op hardcoded lijst */ });
+    return () => { actief = false; };
+  }, []);
 
   // Filter onboarde gemeenten per land
   const onboardeGemeenten = useMemo(() => {
@@ -386,17 +404,20 @@ export default function Dashboard({ gemeenten = {}, dbStatus = 'laden', onSelect
     });
   }, [gemeenten, land]);
 
-  // Zoeklogica: match op naam (startsWith, min. 2 tekens)
+  // Zoeklogica: match op naam (startsWith, min. 2 tekens).
+  // BE gebruikt dynamische lijst als beschikbaar, anders de hardcoded fallback.
   const zoekMatch = useMemo(() => {
     if (!zoekTekst || zoekTekst.length < 2) return null;
-    const lijst = land === 'NL' ? NEDERLANDSE_GEMEENTEN : VLAAMSE_GEMEENTEN;
+    const lijst = land === 'NL'
+      ? NEDERLANDSE_GEMEENTEN
+      : (dynVlaamseGemeenten && dynVlaamseGemeenten.length ? dynVlaamseGemeenten : VLAAMSE_GEMEENTEN);
     // Sluit al onboarde gemeenten uit
     const onboardeNamen = new Set(Object.values(gemeenten).map(g => g.naam.toLowerCase()));
     return lijst.find(g =>
       g.naam.toLowerCase().startsWith(zoekTekst.toLowerCase()) &&
       !onboardeNamen.has(g.naam.toLowerCase())
     ) || null;
-  }, [zoekTekst, land, gemeenten]);
+  }, [zoekTekst, land, gemeenten, dynVlaamseGemeenten]);
 
   const heeftGeenMatch = zoekTekst.length >= 2 && !zoekMatch;
 
