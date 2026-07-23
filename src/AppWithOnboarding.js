@@ -94,6 +94,9 @@ export default function AppWithOnboarding() {
   const [mapReady,        setMapReady]       = useState(false);
   const [showWijken,      setShowWijken]     = useState(false);
   const [showOnboarding,  setShowOnboarding] = useState(false);
+  // Als de gebruiker vanuit het dashboard een gemeente selecteert (naam+nis+provincie),
+  // wordt dat object hier bewaard zodat de wizard direct met die naam kan starten.
+  const [onboardingInit,  setOnboardingInit] = useState(null);
   const [showDelete,      setShowDelete]     = useState(false);
   const [showEditor,      setShowEditor]     = useState(false);
   const sectorenRef      = useRef(null);
@@ -834,7 +837,8 @@ export default function AppWithOnboarding() {
             setGemId(id);
             setShowDashboard(false);
           }}
-          onStartOnboarding={() => {
+          onStartOnboarding={(gemeenteMatch) => {
+            setOnboardingInit(gemeenteMatch || null);
             setShowDashboard(false);
             setShowOnboarding(true);
           }}
@@ -852,8 +856,9 @@ export default function AppWithOnboarding() {
 
       {showOnboarding && (
         <GemeenteOnboarding
+          initialGemeente={onboardingInit}
           onComplete={voegGemeenteToe}
-          onClose={() => setShowOnboarding(false)}
+          onClose={() => { setShowOnboarding(false); setOnboardingInit(null); }}
           saving={saving} />
       )}
 

@@ -429,7 +429,7 @@ export default function Dashboard({ gemeenten = {}, dbStatus = 'laden', onSelect
   }
 
   function handleOnboard() {
-    if (onStartOnboarding) onStartOnboarding();
+    if (onStartOnboarding) onStartOnboarding(zoekMatch);
   }
 
   return (
