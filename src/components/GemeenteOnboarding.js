@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 
 // ── Kleuren ─────────────────────────────────────────────────────────
 const C = {
@@ -218,9 +218,12 @@ out geom;`;
 // ══════════════════════════════════════════════════════════════════════
 // COMPONENT
 // ══════════════════════════════════════════════════════════════════════
-export default function GemeenteOnboarding({ onComplete, onClose }) {
+export default function GemeenteOnboarding({ initialGemeente, onComplete, onClose }) {
+  // Als de wizard vanuit het dashboard geopend is met een reeds geselecteerde
+  // gemeente, start dan direct met die naam ingevuld en trigger één keer de
+  // zoekactie automatisch. Zo hoeft de gebruiker niet opnieuw te typen.
   const [stap,          setStap]         = useState(0);
-  const [zoekNaam,      setZoekNaam]     = useState('');
+  const [zoekNaam,      setZoekNaam]     = useState(initialGemeente?.naam || '');
   const [land,          setLand]         = useState('België');
   const [loading,       setLoading]      = useState(false);
   const [error,         setError]        = useState('');
@@ -323,6 +326,19 @@ export default function GemeenteOnboarding({ onComplete, onClose }) {
     }
     setLoading(false);
   }, [zoekNaam, land]);
+
+  // Auto-zoeken als de wizard geopend wordt met een voorgeselecteerde gemeente
+  // uit het dashboard. Vuurt exact één keer bij mount af, en alleen als er
+  // een naam is meegegeven. Voorkomt dubbele triggers via de useRef guard.
+  const autoZoekGedaan = useRef(false);
+  useEffect(() => {
+    if (!initialGemeente?.naam) return;
+    if (autoZoekGedaan.current) return;
+    autoZoekGedaan.current = true;
+    // Wachten op één render zodat state (zoekNaam) is toegepast, dan pas fetch.
+    const t = setTimeout(() => { zoekGemeente(); }, 0);
+    return () => clearTimeout(t);
+  }, [initialGemeente, zoekGemeente]);
 
   // ── Stap 2: wijktype aan/uit ──────────────────────────────────────
   const toggleWijktype = (idx, key) => {
