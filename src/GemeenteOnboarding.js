@@ -239,11 +239,6 @@ export default function GemeenteOnboarding({ initialGemeente, onComplete, onClos
   const [privePct,      setPrivePct]     = useState('50');
   const [gemeenteOppervlakteKm2, setGemeenteOppervlakteKm2] = useState(null);
   const [inwonersIsSchatting, setInwonersIsSchatting] = useState(true);
-  // Postcodes worden bij Stap 1 automatisch opgehaald via NIS-code
-  // (Statbel/Bpost conversietabel). Faalt de lookup, dan blijft de lijst leeg
-  // en kan de gebruiker ze later handmatig invullen via Gemeente Bewerken.
-  const [postcodes, setPostcodes] = useState([]);
-  const [postcodesInfo, setPostcodesInfo] = useState('');
 
   // Wijk editing
   const [editIdx,       setEditIdx]      = useState(null);
@@ -258,35 +253,6 @@ export default function GemeenteOnboarding({ initialGemeente, onComplete, onClos
       const geo = await fetchNominatim(zoekNaam.trim(), land);
       setGeoData(geo);
       setGemeenteNaam(zoekNaam.trim());
-
-      // Postcodes ophalen via NIS-code (Statbel/Bpost conversietabel).
-      // Als initialGemeente.nis meegegeven is (via dashboard-selectie),
-      // gebruiken we die direct; anders opzoeken via /geo/nis-lookup.
-      // Faalt de hele lookup, dan blijven postcodes leeg en tonen we een
-      // beknopte melding; onboarding kan alsnog verder.
-      (async () => {
-        try {
-          let nisCode = initialGemeente?.nis;
-          if (!nisCode) {
-            const nisResp = await getNisCode(zoekNaam.trim(), land);
-            nisCode = nisResp?.nis || nisResp?.nisCode || nisResp?.code;
-          }
-          if (!nisCode) {
-            setPostcodesInfo('NIS-code niet gevonden; postcodes moet je zelf invullen bij "Gemeente bewerken".');
-            return;
-          }
-          const pcResp = await getPostcodesVoorNis(String(nisCode));
-          const pcs = Array.isArray(pcResp?.postcodes) ? pcResp.postcodes : [];
-          if (pcs.length) {
-            setPostcodes(pcs);
-            setPostcodesInfo(`${pcs.length} postcode(s) automatisch gevonden.`);
-          } else {
-            setPostcodesInfo('Geen postcodes gevonden voor deze NIS-code; vul zelf in bij "Gemeente bewerken".');
-          }
-        } catch (e) {
-          setPostcodesInfo(`Postcodes automatisch ophalen mislukt (${e.message}); vul zelf in bij "Gemeente bewerken".`);
-        }
-      })();
 
       // Ruwe bbox-proxy, ALLEEN als allerlaatste terugvaloptie als de echte
       // opzoeking hieronder niets oplevert.
@@ -406,11 +372,29 @@ export default function GemeenteOnboarding({ initialGemeente, onComplete, onClos
   };
 
   // ── Stap 4: genereer gemeente-object ─────────────────────────────
-  const bevestig = () => {
+  const bevestig = async () => {
     const actieveWijken = wijken.filter(w => w.actief);
     const id = gemeenteNaam.toLowerCase()
       .replace(/\s+/g, '_')
       .replace(/[^a-z0-9_]/g, '');
+
+    // Postcodes ophalen via NIS (Statbel/Bpost conversietabel). Sync — we
+    // wachten hier op zodat de gemeente met postcodes wordt opgeslagen.
+    // Faalt de lookup, dan blijft postcodes leeg en kan de gebruiker ze
+    // later handmatig aanvullen via "Gemeente bewerken".
+    let postcodesResult = [];
+    try {
+      let nisCode = initialGemeente?.nis;
+      if (!nisCode) {
+        const nisResp = await getNisCode(gemeenteNaam, land);
+        nisCode = nisResp?.nis || nisResp?.nisCode || nisResp?.code;
+      }
+      if (nisCode) {
+        const pcResp = await getPostcodesVoorNis(String(nisCode));
+        if (Array.isArray(pcResp?.postcodes)) postcodesResult = pcResp.postcodes;
+      }
+    } catch (_) { /* stil: gemeente wordt opgeslagen zonder postcodes */ }
+
     const gemeente = {
       id, naam: gemeenteNaam,
       provincie: land,
@@ -419,7 +403,7 @@ export default function GemeenteOnboarding({ initialGemeente, onComplete, onClos
       welvaartsindex:   parseFloat(welvaartsindex) || 106.9,
       privePctBerekend: (parseFloat(privePct) || 50) / 100,
       oppervlakteKm2:   gemeenteOppervlakteKm2,
-      postcodes:        Array.isArray(postcodes) ? postcodes : [],
+      postcodes:        postcodesResult,
       center:    geoData.center,
       zoom:      13,
       bbox:      geoData.bbox,
