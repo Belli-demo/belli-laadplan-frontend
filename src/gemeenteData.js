@@ -13,7 +13,7 @@ export const GEMEENTEN = {
     id: 'leuven',
     naam: 'Leuven',
     provincie: 'Vlaams-Brabant',
-    inwoners: 105233, // extern geverifieerd (Rijksregister, 1 januari 2026)
+    inwoners: 104906,
     voertuigen: 48200,
     oppervlakteKm2: 56.63, // extern geverifieerd (Stad Leuven, officiële opgave)
     postcodes: ['3000','3001','3010','3012','3018'], // extern geverifieerd (bpost)
@@ -39,7 +39,7 @@ export const GEMEENTEN = {
     id: 'olen',
     naam: 'Olen',
     provincie: 'Antwerpen',
-    inwoners: 12943, // extern geverifieerd (Rijksregister, 1 januari 2026)
+    inwoners: 14000,
     voertuigen: 8200,
     oppervlakteKm2: 23.10, // extern geverifieerd (Wikipedia/officiële opgave)
     postcodes: ['2250'], // extern geverifieerd (Wikipedia)
@@ -60,8 +60,8 @@ export const GEMEENTEN = {
     id: 'gent',
     naam: 'Gent',
     provincie: 'Oost-Vlaanderen',
-    inwoners: 273665, // extern geverifieerd (Rijksregister, 1 januari 2026)
-    voertuigen: 96409, // extern geverifieerd (Statbel 2023, via AlleCijfers.be)
+    inwoners: 268000,
+    voertuigen: 112000,
     oppervlakteKm2: 156.18, // extern geverifieerd (Wikipedia/officiële opgave)
     postcodes: ['9000','9030','9031','9032','9040','9050','9051','9052'], // beste inschatting, mogelijk niet volledig
     welvaartsindex: 98, // schatting, nog te verifiëren bij Statbel
@@ -113,14 +113,26 @@ export const DOELGROEP_LAADTYPE = {
   ov:  { ac: 0.05, dc: 0.35, hpc: 0.60 },
 };
 
-// Stap 4 — utilisatie per laadpunt (MWh/maand), jaar voor jaar
-// AC: echte Allego-tenderdata (Leuven/Mechelen), geplafonneerd op MOW's eigen
-// "paal volgt paal"-trigger (>1.000 kWh/maand -> nieuwe paal).
-const AC_KWH_PER_JAAR_TENDER = {
+// Stap 4 — utilisatie per laadpunt (MWh/jaar), lineair van 6 MWh (2026)
+// naar 12 MWh (2035). V5-methodiek: bezettingsgraad groeit mee met EV-adoptie.
+// Vervangt de eerdere AC_KWH_PER_JAAR_TENDER met vast plafond op 1 MWh/maand.
+// De oude tabel is bewaard als AC_KWH_PER_JAAR_TENDER_LEGACY voor eventuele
+// referentie/vergelijking, maar wordt niet meer gebruikt in calcWijk.
+const AC_KWH_PER_JAAR_TENDER_LEGACY = {
   2025:9000, 2026:9810, 2027:10693, 2028:11548, 2029:12472, 2030:13345,
   2031:14279, 2032:15279, 2033:16196, 2034:17006, 2035:17857,
 };
-export const AC_TRIGGER_MWH_MAAND = 1.0; // Bijlage 11, I.2
+export const AC_TRIGGER_MWH_MAAND = 1.0; // Bijlage 11, I.2 (legacy, niet meer gebruikt)
+
+// V5: lineaire curve AC-utilisatie per socket per jaar (MWh)
+export const AC_UTIL_MWH_JAAR_START = 6.0;  // 2026
+export const AC_UTIL_MWH_JAAR_EIND  = 12.0; // 2035
+export function acUtilisatieMwhJaarV5(jaar) {
+  if (jaar <= 2026) return AC_UTIL_MWH_JAAR_START;
+  if (jaar >= 2035) return AC_UTIL_MWH_JAAR_EIND;
+  return AC_UTIL_MWH_JAAR_START +
+    (AC_UTIL_MWH_JAAR_EIND - AC_UTIL_MWH_JAAR_START) * (jaar - 2026) / 9;
+}
 
 // DC/HPC: eigen marktinschatting (P50, getoetst tegen Fastned-jaarcijfers 2025),
 // gefaseerde groei 8% (2027-2028) / 6% (2029-2032) / 4% (2033-2035) per jaar.
@@ -132,6 +144,33 @@ function dcHpcGroeiPct(jaar) {
 }
 
 export const REDUNDANTIE_MARGE = 0.10; // dekt ook "Paal volgt Wagen", zie Leeswijzer §7
+
+// ── V5-methodiek: extra parameters ─────────────────────────────────────
+// Gedifferentieerde redundantie per laadtype (V5 audit FIX 5)
+export const REDUNDANTIE_MARGE_AC  = 0.10; // AC: 10%
+export const REDUNDANTIE_MARGE_DC  = 0.15; // DC: 15% (hogere criticaliteit)
+export const REDUNDANTIE_MARGE_HPC = 0.20; // HPC: 20% (hoogste criticaliteit)
+
+// Werk privé-fractie (aandeel bedrijfswagens met thuislader).
+// Los van gemeentelijke privePct, omdat forensen ander laadgedrag hebben.
+// V5 audit FIX 3.
+export const WERK_PRIVE_PCT = 0.45;
+
+// Fluvius onderregistratie correctiefactor (Solar Magazine / Fluvius schatting).
+// Werkelijk aantal privé-laadpunten ≈ Fluvius Fp × KAPPA.
+export const FLUVIUS_KAPPA = 2.0;
+
+// Gewichtsfactor semi-publiek in de totale beschikbare publiek+semi capaciteit.
+// Bijlage 11 NAL: semi-publieke laadpunten voor 50% meetellen.
+export const SEMI_GEWICHTSFACTOR = 0.5;
+
+// Placeholder-daling privé-aandeel per jaar (V5 Stap 3). Wordt vervangen door
+// cluster-uitkomst zodra Fluvius/MOW/DIV/Statbel-analyse beschikbaar is.
+export const PRIVE_DALING_PER_JAAR = 0.02;
+
+// V-groei (voertuigenpark) per jaar. Historische trend Vlaanderen 2006-2023
+// ~1,25%/jaar, huidige trend rond 0,5%. V5.1.
+export const V_GROEI_PER_JAAR = 0.005;
 
 export const YEARS = [2025, 2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033, 2034, 2035];
 
@@ -227,10 +266,10 @@ export function evAandeelGemeente(jaar, welvaartsindexGemeente = WELVAARTSINDEX_
   return basis * (welvaartsindexGemeente / WELVAARTSINDEX_VLAANDEREN);
 }
 
-// ── Stap 4: utilisatie per laadpunt, met plafond op AC ─────────────────
+// ── Stap 4: utilisatie per laadpunt (V5: lineaire AC-curve 6→12 MWh/jaar) ─
+// Behoud MwhMaand-signatuur voor backwards compatibility met bestaande callers.
 export function acUtilisatieMwhMaand(jaar) {
-  const kwhJaar = AC_KWH_PER_JAAR_TENDER[jaar] ?? AC_KWH_PER_JAAR_TENDER[2035];
-  return Math.min(kwhJaar / 12 / 1000, AC_TRIGGER_MWH_MAAND);
+  return acUtilisatieMwhJaarV5(jaar) / 12;
 }
 function groeiCurve(startWaarde, totJaar) {
   let waarde = startWaarde;
@@ -239,6 +278,236 @@ function groeiCurve(startWaarde, totJaar) {
 }
 export function dcUtilisatieMwhMaand(jaar)  { return groeiCurve(DC_HPC_START_MWH_MAAND.dc,  jaar); }
 export function hpcUtilisatieMwhMaand(jaar) { return groeiCurve(DC_HPC_START_MWH_MAAND.hpc, jaar); }
+
+// ── V5-methodiek helpers ────────────────────────────────────────────────
+
+/**
+ * V5 Stap 2 + 3: bereken startjaarverhouding (privePct_0, publiekPct_0,
+ * semiPct_0, semiFractie_0) EN de per-jaar gedaalde privePct_j met
+ * bijbehorende publiekPct_j en semiPct_j (workplace charging = 50/50 pub/sem).
+ *
+ * @param {object} gemeente
+ * @param {number} gemeente.fluvius   - geregistreerde Fluvius privé-laadpunten (Fp)
+ * @param {number} gemeente.mow_qp_ac
+ * @param {number} gemeente.mow_qp_dc
+ * @param {number} gemeente.mow_qp_hpc
+ * @param {number} gemeente.mow_qs_ac
+ * @param {number} gemeente.mow_qs_dc
+ * @param {number} gemeente.mow_qs_hpc
+ * @param {number} jaar
+ * @param {object} [opts]
+ * @param {number} [opts.kappa=FLUVIUS_KAPPA]
+ * @param {number} [opts.semiGewicht=SEMI_GEWICHTSFACTOR]
+ * @param {number} [opts.priveDaling=PRIVE_DALING_PER_JAAR]
+ * @param {number} [opts.startjaar=2026]
+ */
+export function berekenPubliekSemiSplitV5(gemeente, jaar, opts = {}) {
+  const kappa       = opts.kappa       ?? FLUVIUS_KAPPA;
+  const semiGewicht = opts.semiGewicht ?? SEMI_GEWICHTSFACTOR;
+  const priveDaling = opts.priveDaling ?? PRIVE_DALING_PER_JAAR;
+  const startjaar   = opts.startjaar   ?? 2026;
+
+  const Fp = gemeente.fluvius ?? 0;
+  const P  = Fp * kappa;
+
+  const Qp = (gemeente.mow_qp_ac  ?? 0)
+           + (gemeente.mow_qp_dc  ?? 0)
+           + (gemeente.mow_qp_hpc ?? 0);
+  const QsOng = (gemeente.mow_qs_ac  ?? 0)
+              + (gemeente.mow_qs_dc  ?? 0)
+              + (gemeente.mow_qs_hpc ?? 0);
+  const Qs = semiGewicht * QsOng;
+  const Q  = Qp + Qs;
+
+  if (P + Q <= 0) {
+    return {
+      P: 0, Qp: 0, Qs: 0, Q: 0,
+      privePct_0: 0.5, publiekPct_0: 0.25, semiPct_0: 0.25,
+      semiFractie_0: 0.5,
+      privePct_j: 0.5, publiekPct_j: 0.25, semiPct_j: 0.25,
+    };
+  }
+
+  const privePct_0   = P / (P + Q);
+  const publiekPct_0 = Qp / (P + Q);
+  const semiPct_0    = Qs / (P + Q);
+  const semiFractie_0 = Q > 0 ? Qs / Q : 0;
+
+  // Per-jaar dalingsformule: privePct_j = privePct_0 - (j - startjaar) × daling
+  // Geen ondergrens (bewuste keuze; verwijderd t.o.v. V5 excel).
+  // Workplace charging: 50/50 verdeeld over publiek en semi (audit FIX 2).
+  const jarenNaStart = Math.max(0, jaar - startjaar);
+  const privePct_j = Math.max(0, privePct_0 - priveDaling * jarenNaStart);
+  const werkelijkeDaling = privePct_0 - privePct_j;
+  const publiekPct_j = publiekPct_0 + werkelijkeDaling / 2;
+  const semiPct_j    = semiPct_0    + werkelijkeDaling / 2;
+
+  return {
+    P, Qp, Qs, Q,
+    privePct_0, publiekPct_0, semiPct_0, semiFractie_0,
+    privePct_j, publiekPct_j, semiPct_j,
+  };
+}
+
+/**
+ * V5.1: gemeente-voertuigenpark met V-groei per jaar sinds startjaar.
+ * @param {number} vBasis - voertuigenpark in startjaar
+ * @param {number} jaar
+ * @param {object} [opts]
+ * @param {number} [opts.vGroei=V_GROEI_PER_JAAR]
+ * @param {number} [opts.startjaar=2026]
+ */
+export function voertuigenparkV5(vBasis, jaar, opts = {}) {
+  const vGroei    = opts.vGroei    ?? V_GROEI_PER_JAAR;
+  const startjaar = opts.startjaar ?? 2026;
+  const jarenNaStart = jaar - startjaar;
+  return vBasis * Math.pow(1 + vGroei, jarenNaStart);
+}
+
+/**
+ * V5 Stap 6+7: bereken sockets nodig en bijkomend, gesplitst per laadtype
+ * (AC/DC/HPC) en per domein (publiek/semi). Werkt op stadsniveau: sommeert
+ * de calcWijk-output over alle wijken van de gemeente.
+ *
+ * Bijkomend is gedefinieerd als CUMULATIEF tekort t.o.v. startjaar (voor
+ * stadsweergave). Jaar-op-jaar delta per wijk wordt apart berekend via
+ * berekenBijkomendPerWijkV5.
+ *
+ * @param {object} gemeente - moet 'wijken' bevatten, Fluvius, MOW-splitsing
+ * @param {number} jaar
+ * @param {object} params - identiek aan calcWijk-params
+ */
+export function berekenStadV5(gemeente, jaar, params) {
+  const split = berekenPubliekSemiSplitV5(gemeente, jaar, params);
+
+  const totPub = { AC: 0, DC: 0, HPC: 0 };
+  const totSem = { AC: 0, DC: 0, HPC: 0 };
+  const mwhPub = { AC: 0, DC: 0, HPC: 0 };
+  const mwhSem = { AC: 0, DC: 0, HPC: 0 };
+
+  const acPj  = acUtilisatieMwhJaarV5(jaar);
+  const dcPj  = dcUtilisatieMwhMaand(jaar)  * 12;
+  const hpcPj = hpcUtilisatieMwhMaand(jaar) * 12;
+
+  for (const w of (gemeente.wijken ?? [])) {
+    const wc = calcWijk(w, {
+      ...params,
+      year: jaar,
+      privePct: split.privePct_j,
+      privePctOverride: null,
+    });
+    // Splitsen van mwhAC/DC/HPC naar publiek en semi via semiFractie_0
+    const sf = split.semiFractie_0;
+    mwhPub.AC  += wc.mwhAC  * (1 - sf);
+    mwhPub.DC  += wc.mwhDC  * (1 - sf);
+    mwhPub.HPC += wc.mwhHPC * (1 - sf);
+    mwhSem.AC  += wc.mwhAC  * sf;
+    mwhSem.DC  += wc.mwhDC  * sf;
+    mwhSem.HPC += wc.mwhHPC * sf;
+  }
+
+  totPub.AC  = (mwhPub.AC  / acPj)  * (1 + REDUNDANTIE_MARGE_AC);
+  totPub.DC  = (mwhPub.DC  / dcPj)  * (1 + REDUNDANTIE_MARGE_DC);
+  totPub.HPC = (mwhPub.HPC / hpcPj) * (1 + REDUNDANTIE_MARGE_HPC);
+  totSem.AC  = (mwhSem.AC  / acPj)  * (1 + REDUNDANTIE_MARGE_AC);
+  totSem.DC  = (mwhSem.DC  / dcPj)  * (1 + REDUNDANTIE_MARGE_DC);
+  totSem.HPC = (mwhSem.HPC / hpcPj) * (1 + REDUNDANTIE_MARGE_HPC);
+
+  const bestaandPub = {
+    AC:  gemeente.mow_qp_ac  ?? 0,
+    DC:  gemeente.mow_qp_dc  ?? 0,
+    HPC: gemeente.mow_qp_hpc ?? 0,
+  };
+  const bestaandSem = {
+    AC:  gemeente.mow_qs_ac  ?? 0,
+    DC:  gemeente.mow_qs_dc  ?? 0,
+    HPC: gemeente.mow_qs_hpc ?? 0,
+  };
+
+  // Cumulatief bijkomend op stadsniveau (max 0 als bestaand > nodig)
+  const bijPub = {
+    AC:  Math.max(0, totPub.AC  - bestaandPub.AC),
+    DC:  Math.max(0, totPub.DC  - bestaandPub.DC),
+    HPC: Math.max(0, totPub.HPC - bestaandPub.HPC),
+  };
+  const bijSem = {
+    AC:  Math.max(0, totSem.AC  - bestaandSem.AC),
+    DC:  Math.max(0, totSem.DC  - bestaandSem.DC),
+    HPC: Math.max(0, totSem.HPC - bestaandSem.HPC),
+  };
+
+  return {
+    split,
+    nodig: { pub: totPub, sem: totSem },
+    bijkomend_cumulatief: { pub: bijPub, sem: bijSem },
+    mwh: { pub: mwhPub, sem: mwhSem },
+    bestaand: { pub: bestaandPub, sem: bestaandSem },
+  };
+}
+
+/**
+ * V5 Stap 7: bijkomend PER WIJK als jaar-op-jaar delta.
+ * bijkomend_j_wijk = max(0, nodig_j_wijk - max(nodig_(j-1)_wijk, bestaand_wijk))
+ *
+ * NB: bestaand wordt hier per wijk als 0 aangenomen; caller moet zelf
+ * bestaandPerWijk aftrekken indien beschikbaar (bijv. via nearest-centroid
+ * MOW-toewijzing in de app).
+ *
+ * @param {object} gemeente
+ * @param {object} params
+ * @param {number[]} jaren - array van jaartallen, bijv. [2026,2027,...,2035]
+ * @param {object} [bestaandPerWijk] - optioneel per wijk-id een {AC,DC,HPC} bestaandobject
+ */
+export function berekenBijkomendPerWijkV5(gemeente, params, jaren, bestaandPerWijk = {}) {
+  const nodigCumulatief = {}; // wijkId -> jaar -> {AC,DC,HPC}
+  for (const w of (gemeente.wijken ?? [])) {
+    nodigCumulatief[w.id] = {};
+    for (const jaar of jaren) {
+      const split = berekenPubliekSemiSplitV5(gemeente, jaar, params);
+      const wc = calcWijk(w, {
+        ...params,
+        year: jaar,
+        privePct: split.privePct_j,
+        privePctOverride: null,
+      });
+      nodigCumulatief[w.id][jaar] = {
+        AC:  wc.totAC,
+        DC:  wc.totDC,
+        HPC: wc.totHPC,
+      };
+    }
+  }
+
+  const result = {}; // wijkId -> jaar -> {AC,DC,HPC}
+  for (const w of (gemeente.wijken ?? [])) {
+    result[w.id] = {};
+    const bw = bestaandPerWijk[w.id] ?? { AC: 0, DC: 0, HPC: 0 };
+    for (let i = 0; i < jaren.length; i++) {
+      const jaar = jaren[i];
+      const nodig = nodigCumulatief[w.id][jaar];
+      const bij = { AC: 0, DC: 0, HPC: 0 };
+      for (const tp of ['AC', 'DC', 'HPC']) {
+        if (i === 0) {
+          bij[tp] = Math.max(0, nodig[tp] - bw[tp]);
+        } else {
+          const vorig = nodigCumulatief[w.id][jaren[i-1]];
+          const referentie = Math.max(vorig[tp], bw[tp]);
+          bij[tp] = Math.max(0, nodig[tp] - referentie);
+        }
+      }
+      result[w.id][jaar] = bij;
+    }
+  }
+  return { bijkomend_delta_per_wijk: result, nodig_cumulatief_per_wijk: nodigCumulatief };
+}
+
+// ── Provincies in Cijfers API-key placeholder (V5) ─────────────────────
+// De API-key wordt straks als Railway env var PROVINCIES_INCIJFERS_API_KEY
+// geïnjecteerd in de backend. Frontend haalt EV-aandeel op via het backend
+// endpoint /geo/ev-aandeel/:nisCode dat de key server-side gebruikt.
+// Deze constante is puur documentatief en wordt zelf niet gebruikt in
+// calcWijk; het endpoint-antwoord vult wijk.evAandeelOverride[jaar].
+export const EV_AANDEEL_API_ENDPOINT = '/geo/ev-aandeel'; // + :nisCode
 
 /**
  * Berekent voor één wijk, in één jaar, de bruto AC/DC/HPC-behoefte
