@@ -156,9 +156,11 @@ export const REDUNDANTIE_MARGE_HPC = 0.20; // HPC: 20% (hoogste criticaliteit)
 // V5 audit FIX 3.
 export const WERK_PRIVE_PCT = 0.45;
 
-// Fluvius onderregistratie correctiefactor (Solar Magazine / Fluvius schatting).
-// Werkelijk aantal privé-laadpunten ≈ Fluvius Fp × KAPPA.
-export const FLUVIUS_KAPPA = 2.0;
+// Fluvius onderregistratie correctiefactor. Uitgangspunt: 35% van de private
+// laadpunten wordt niet aangemeld (conservatiever dan de 50% uit Solar Magazine).
+// Werkelijk aantal privé-laadpunten ≈ Fluvius Fp × KAPPA, waarbij KAPPA = 1/0,65.
+export const FLUVIUS_ONDERREGISTRATIE = 0.35;
+export const FLUVIUS_KAPPA = 1 / (1 - FLUVIUS_ONDERREGISTRATIE); // ≈ 1,5385
 
 // Gewichtsfactor semi-publiek in de totale beschikbare publiek+semi capaciteit.
 // Bijlage 11 NAL: semi-publieke laadpunten voor 50% meetellen.

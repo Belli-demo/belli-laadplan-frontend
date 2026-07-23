@@ -2,10 +2,10 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { GEMEENTEN as FALLBACK_GEMEENTEN, calcWijk, YEARS, slimLadenExtraRuimte } from './gemeenteData';
+import { GEMEENTEN as FALLBACK_GEMEENTEN, calcWijk, YEARS, slimLadenExtraRuimte, berekenPubliekSemiSplitV5 } from './gemeenteData';
 import GemeenteOnboarding from './components/GemeenteOnboarding';
 import GemeenteEditor from './components/GemeenteEditor';
-import { getAlleGemeenten, getGemeente, slaGemeenteOp, verwijderGemeente, checkHealth, onboardGemeenteGeo, getSectoren, syncWijkenVanStatbel, getLaadpalen } from './api';
+import { getAlleGemeenten, getGemeente, slaGemeenteOp, verwijderGemeente, checkHealth, onboardGemeenteGeo, getSectoren, syncWijkenVanStatbel, getLaadpalen, getFluviusPrive } from './api';
 import Dashboard from './Dashboard';
 
 delete L.Icon.Default.prototype._getIconUrl;
@@ -110,6 +110,7 @@ export default function AppWithOnboarding() {
   const [selectedWijk,    setSelectedWijk]   = useState(null);
   const [existingPalen,   setExistingPalen]  = useState([]);
   const [loadingPalen,    setLoadingPalen]   = useState(false);
+  const [fluviusFp,       setFluviusFp]      = useState(null); // V5: ruwe Fluvius-telling
   const [chartTab,        setChartTab]       = useState('lp');
   const [selectedWijkDetail, setSelectedWijkDetail] = useState(null);
 
@@ -131,18 +132,11 @@ export default function AppWithOnboarding() {
   const trendFactor = 1.0;
 
   // calcParams: privePctOverride blijft de vroegere "% publiek laden"-schuifknop,
-  // nu als bewuste override op het berekende privePctBerekend van de gemeente
-  // (zie gemeenteData.js). Leeg (null) laten = het berekende cijfer gebruiken.
-  const calcParams = {
-    year,
-    welvaartsindexGemeente: gemeente?.welvaartsindex,
-    evAandeelOverride: gemeente?.evAandeelOverride?.[year] ?? null,
-    privePct: gemeente?.privePctBerekend,
-    privePctOverride: privePctOverride,
-    redundantieMarge,
-    trendFactor,
-    slimLaden: trends.slim,
-  };
+  // nu als bewuste override op het V5-berekende privePct_j van de gemeente
+  // (zie berekenPubliekSemiSplitV5 in gemeenteData.js). Leeg (null) laten =
+  // het V5-berekende cijfer voor dit jaar gebruiken.
+  // De definitie van calcParams volgt hieronder, na de MOW-telling, omdat V5
+  // de MOW-tellingen per laadtype nodig heeft.
 
   // ── Bestaande laadpunten toewijzen aan dichtstbijzijnde wijk ────────
   // (zelfde dichtstbijzijnde-centroïde-methode als de sector-koppeling
@@ -152,8 +146,13 @@ export default function AppWithOnboarding() {
   // laadpunt telt voor 100%, elk semi-publiek laadpunt voor 50% mee
   // (Bijlage 11: "aangezien ze niet permanent beschikbaar zijn").
   const leegType = () => ({ AC: 0, DC: 0, HPC: 0 });
+  const leegV5 = () => ({ Qp_AC: 0, Qp_DC: 0, Qp_HPC: 0, Qs_AC: 0, Qs_DC: 0, Qs_HPC: 0 });
   const bestaandPerWijk = {};
-  (gemeente?.wijken || []).forEach(w => { bestaandPerWijk[w.id] = leegType(); });
+  const bestaandV5PerWijk = {};
+  (gemeente?.wijken || []).forEach(w => {
+    bestaandPerWijk[w.id] = leegType();
+    bestaandV5PerWijk[w.id] = leegV5();
+  });
   existingPalen.forEach(el => {
     const lat = el.lat ?? el.center?.lat;
     const lng = el.lon ?? el.center?.lon;
@@ -167,13 +166,59 @@ export default function AppWithOnboarding() {
     if (!beste) return;
     const t = el.tags || {};
     const type = t.mow_snelheid === 'ultrasnel' ? 'HPC' : t.mow_snelheid === 'snel' ? 'DC' : 'AC';
-    const gewicht = t.mow_toegankelijkheid === 'semi-publiek' ? 0.5 : 1;
+    const isSemi = t.mow_toegankelijkheid === 'semi-publiek';
+    const gewicht = isSemi ? 0.5 : 1;
     bestaandPerWijk[beste.id][type] += gewicht;
+    // V5: aparte tellers publiek (Qp) en semi-publiek (Qs), ONGEWOGEN.
+    // De 0,5-weging op semi wordt in V5 pas in berekenPubliekSemiSplitV5
+    // toegepast via SEMI_GEWICHTSFACTOR.
+    if (isSemi) bestaandV5PerWijk[beste.id]['Qs_' + type] += 1;
+    else        bestaandV5PerWijk[beste.id]['Qp_' + type] += 1;
   });
   // Optelling per type, voor de bestaand-tegels/labels elders in de app
   const bestaandTotaalPerType = Object.values(bestaandPerWijk).reduce((s, b) => ({
     AC: s.AC + b.AC, DC: s.DC + b.DC, HPC: s.HPC + b.HPC,
   }), leegType());
+  // V5: totalen per gemeente per publiek/semi × AC/DC/HPC (voor
+  // berekenPubliekSemiSplitV5). Ongewogen aantallen.
+  const bestaandV5Totaal = Object.values(bestaandV5PerWijk).reduce((s, b) => ({
+    Qp_AC:  s.Qp_AC  + b.Qp_AC,  Qp_DC:  s.Qp_DC  + b.Qp_DC,  Qp_HPC: s.Qp_HPC + b.Qp_HPC,
+    Qs_AC:  s.Qs_AC  + b.Qs_AC,  Qs_DC:  s.Qs_DC  + b.Qs_DC,  Qs_HPC: s.Qs_HPC + b.Qs_HPC,
+  }), leegV5());
+
+  // ── V5: bereken privePct_j voor huidige jaar via Fluvius + MOW ─────
+  // Formule: P = Fluvius Fp × κ (κ = 1/(1-onderregistratie), zie gemeenteData.js).
+  //          Q = MOW publiek + 0,5 × MOW semi (per laadtype opgeteld).
+  //          privePct_0 = P/(P+Q), daalt per jaar met PRIVE_DALING_PER_JAAR.
+  // Valt terug op gemeente?.privePctBerekend als Fluvius Fp of MOW-tellingen
+  // ontbreken (bijv. geen postcodes ingesteld, geen MOW-data live).
+  const v5Gemeente = {
+    fluvius: fluviusFp,
+    mow_qp_ac:  bestaandV5Totaal.Qp_AC,
+    mow_qp_dc:  bestaandV5Totaal.Qp_DC,
+    mow_qp_hpc: bestaandV5Totaal.Qp_HPC,
+    mow_qs_ac:  bestaandV5Totaal.Qs_AC,
+    mow_qs_dc:  bestaandV5Totaal.Qs_DC,
+    mow_qs_hpc: bestaandV5Totaal.Qs_HPC,
+  };
+  const heeftV5Data = fluviusFp != null && fluviusFp > 0 &&
+    (bestaandV5Totaal.Qp_AC + bestaandV5Totaal.Qp_DC + bestaandV5Totaal.Qp_HPC +
+     bestaandV5Totaal.Qs_AC + bestaandV5Totaal.Qs_DC + bestaandV5Totaal.Qs_HPC) > 0;
+  const v5Split = heeftV5Data ? berekenPubliekSemiSplitV5(v5Gemeente, year) : null;
+  const v5PrivePctJ = v5Split?.privePct_j;
+
+  const calcParams = {
+    year,
+    welvaartsindexGemeente: gemeente?.welvaartsindex,
+    evAandeelOverride: gemeente?.evAandeelOverride?.[year] ?? null,
+    // V5: gebruik jaar-afhankelijke privePct_j als beschikbaar; anders val
+    // terug op de statische privePctBerekend uit de database.
+    privePct: v5PrivePctJ != null ? v5PrivePctJ : gemeente?.privePctBerekend,
+    privePctOverride: privePctOverride,
+    redundantieMarge,
+    trendFactor,
+    slimLaden: trends.slim,
+  };
 
   // CAPEX per laadtype (per laadpunt/socket, niet per paal):
   // - AC: gevalideerd door de gebruiker obv actuele marktprijzen (hardware,
@@ -251,7 +296,15 @@ export default function AppWithOnboarding() {
   const capexBijkomend = Math.max(0, capexBijkomendRuw - geplandAangerekend*CAPEX_V2.AC);
 
   const tijdreeks = YEARS.map(yr => {
-    const p = {...calcParams, year:yr, evAandeelOverride: gemeente?.evAandeelOverride?.[yr] ?? null};
+    // V5: herbereken privePct_j per jaar (daalt lineair per PRIVE_DALING_PER_JAAR).
+    const v5SplitJaar = heeftV5Data ? berekenPubliekSemiSplitV5(v5Gemeente, yr) : null;
+    const privePctJaar = v5SplitJaar?.privePct_j != null ? v5SplitJaar.privePct_j : gemeente?.privePctBerekend;
+    const p = {
+      ...calcParams,
+      year: yr,
+      evAandeelOverride: gemeente?.evAandeelOverride?.[yr] ?? null,
+      privePct: privePctJaar,
+    };
     const res = (gemeente?.wijken||[]).map(w => {
       const d = calcWijk(w, p);
       const bestaand = bestaandPerWijk[w.id] || leegType();
@@ -462,6 +515,14 @@ export default function AppWithOnboarding() {
     } catch(e) {
       console.warn('Laadpalen ophalen mislukt:', e.message);
       setExistingPalen([]);
+    }
+    // V5: haal ook Fluvius ruwe telling op, voor de publiek/semi-splitberekening.
+    // Faalt stil als postcodes ontbreken; V5 valt terug op gemeente?.privePctBerekend.
+    try {
+      const fj = await getFluviusPrive(gemId);
+      setFluviusFp(fj?.aantalPrive ?? fj?.totaal ?? null);
+    } catch (e) {
+      setFluviusFp(null);
     }
     setLoadingPalen(false);
   }, [gemId, gemeente]);
@@ -737,7 +798,14 @@ export default function AppWithOnboarding() {
   const wijkTijdreeks = (wijk) => {
     if (!wijk) return [];
     return YEARS.filter(y => y >= 2027).map(yr => {
-      const p = { ...calcParams, year: yr, evAandeelOverride: gemeente?.evAandeelOverride?.[yr] ?? null };
+      const v5SplitJaar = heeftV5Data ? berekenPubliekSemiSplitV5(v5Gemeente, yr) : null;
+      const privePctJaar = v5SplitJaar?.privePct_j != null ? v5SplitJaar.privePct_j : gemeente?.privePctBerekend;
+      const p = {
+        ...calcParams,
+        year: yr,
+        evAandeelOverride: gemeente?.evAandeelOverride?.[yr] ?? null,
+        privePct: privePctJaar,
+      };
       const d = calcWijk(wijk, p);
       const bestaand = bestaandPerWijk[wijk.id] || { AC: 0, DC: 0, HPC: 0 };
       const delta = {
