@@ -15,6 +15,7 @@ export async function getAlleGemeenten() { return apiFetch('/gemeenten'); }
 export async function getGemeente(id)    { return apiFetch(`/gemeenten/${id}`); }
 export async function getFluviusPrive(id) { return apiFetch(`/geo/fluvius-prive/${id}`); }
 export async function getGemeentenLijst(land = 'België') { return apiFetch(`/geo/gemeenten-lijst?land=${encodeURIComponent(land)}`); }
+export async function getPostcodesVoorNis(nis) { return apiFetch(`/geo/postcodes/${encodeURIComponent(nis)}`); }
 export async function getBevolking(naam) { return apiFetch(`/geo/bevolking/${encodeURIComponent(naam)}`); }
 export async function verversBevolkingscijfers() { return apiFetch('/geo/ververs-bevolking', { method:'POST' }); }
 export async function slaGemeenteOp(g)  { return apiFetch('/gemeenten', { method:'POST', body:JSON.stringify(g) }); }

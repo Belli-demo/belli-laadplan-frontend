@@ -1,4 +1,5 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { getNisCode, getPostcodesVoorNis } from '../api';
 
 // ── Kleuren ─────────────────────────────────────────────────────────
 const C = {
@@ -23,24 +24,55 @@ const STAPPEN = ['Gemeente zoeken', 'Wijken & Data', 'Wijktype', 'Bevestiging'];
 // ── API calls ────────────────────────────────────────────────────────
 
 // Nominatim: gemeente → center, bbox, NIS-code
-async function fetchNominatim(naam, land) {
-  const q = encodeURIComponent(`${naam}, ${land}`);
-  const url = `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=3&addressdetails=1&countrycodes=${land === 'België' ? 'be' : 'nl'}`;
+// Robuuste versie: retry bij falen (Nominatim heeft rate-limit 1/sec + soms
+// tijdelijke uitval). Fallback: probeer zonder land-suffix als eerste poging
+// niets oplevert.
+async function fetchNominatimSingle(query, land) {
+  const q = encodeURIComponent(query);
+  const url = `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=5&addressdetails=1&countrycodes=${land === 'België' ? 'be' : 'nl'}`;
   const resp = await fetch(url, { headers:{ 'User-Agent':'Belli-Laadkaart/1.0 (info@belli.eu)' } });
-  if (!resp.ok) throw new Error('Nominatim niet beschikbaar');
+  if (!resp.ok) {
+    const err = new Error(`Nominatim HTTP ${resp.status}`);
+    err.retryable = resp.status === 429 || resp.status >= 500;
+    throw err;
+  }
   const data = await resp.json();
-  // Filter op municipality/city
-  const match = data.find(d => ['municipality','city','town','village'].includes(d.type) || d.class === 'boundary')
-    || data[0];
-  if (!match) throw new Error(`Gemeente "${naam}" niet gevonden`);
-  const bb = match.boundingbox; // [south, north, west, east]
-  return {
-    center: [parseFloat(match.lat), parseFloat(match.lon)],
-    bbox:   [parseFloat(bb[0]), parseFloat(bb[2]), parseFloat(bb[1]), parseFloat(bb[3])],
-    displayName: match.display_name.split(',').slice(0,2).join(', '),
-    osmId: match.osm_id,
-    type:  match.type,
-  };
+  return data;
+}
+
+async function fetchNominatim(naam, land) {
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  const queries = [`${naam}, ${land}`, naam]; // eerst met land, dan zonder
+  let laatsteFout = null;
+
+  for (const query of queries) {
+    for (let poging = 0; poging < 3; poging++) {
+      try {
+        const data = await fetchNominatimSingle(query, land);
+        // Filter op municipality/city/town/village en boundary
+        const match = data.find(d => ['municipality','city','town','village'].includes(d.type) || d.class === 'boundary')
+          || data[0];
+        if (match) {
+          const bb = match.boundingbox; // [south, north, west, east]
+          return {
+            center: [parseFloat(match.lat), parseFloat(match.lon)],
+            bbox:   [parseFloat(bb[0]), parseFloat(bb[2]), parseFloat(bb[1]), parseFloat(bb[3])],
+            displayName: match.display_name.split(',').slice(0,2).join(', '),
+            osmId: match.osm_id,
+            type:  match.type,
+          };
+        }
+        break; // geen match voor deze query, probeer volgende query
+      } catch (e) {
+        laatsteFout = e;
+        if (!e.retryable) break; // niet-retryable fout, ga naar volgende query
+        await sleep(1500); // wacht voor rate-limit
+      }
+    }
+  }
+
+  if (laatsteFout) throw new Error(`Nominatim onbereikbaar (${laatsteFout.message}). Probeer opnieuw over 10-20 seconden.`);
+  throw new Error(`Gemeente "${naam}" niet gevonden in OpenStreetMap. Controleer de spelling.`);
 }
 
 // Oppervlakte (km2) van een polygoon obv lat/lon-coördinaten, met een lokale
@@ -187,9 +219,12 @@ out geom;`;
 // ══════════════════════════════════════════════════════════════════════
 // COMPONENT
 // ══════════════════════════════════════════════════════════════════════
-export default function GemeenteOnboarding({ onComplete, onClose }) {
+export default function GemeenteOnboarding({ initialGemeente, onComplete, onClose }) {
+  // Als de wizard vanuit het dashboard geopend is met een reeds geselecteerde
+  // gemeente, start dan direct met die naam ingevuld en trigger één keer de
+  // zoekactie automatisch. Zo hoeft de gebruiker niet opnieuw te typen.
   const [stap,          setStap]         = useState(0);
-  const [zoekNaam,      setZoekNaam]     = useState('');
+  const [zoekNaam,      setZoekNaam]     = useState(initialGemeente?.naam || '');
   const [land,          setLand]         = useState('België');
   const [loading,       setLoading]      = useState(false);
   const [error,         setError]        = useState('');
@@ -204,6 +239,11 @@ export default function GemeenteOnboarding({ onComplete, onClose }) {
   const [privePct,      setPrivePct]     = useState('50');
   const [gemeenteOppervlakteKm2, setGemeenteOppervlakteKm2] = useState(null);
   const [inwonersIsSchatting, setInwonersIsSchatting] = useState(true);
+  // Postcodes worden bij Stap 1 automatisch opgehaald via NIS-code
+  // (Statbel/Bpost conversietabel). Faalt de lookup, dan blijft de lijst leeg
+  // en kan de gebruiker ze later handmatig invullen via Gemeente Bewerken.
+  const [postcodes, setPostcodes] = useState([]);
+  const [postcodesInfo, setPostcodesInfo] = useState('');
 
   // Wijk editing
   const [editIdx,       setEditIdx]      = useState(null);
@@ -218,6 +258,35 @@ export default function GemeenteOnboarding({ onComplete, onClose }) {
       const geo = await fetchNominatim(zoekNaam.trim(), land);
       setGeoData(geo);
       setGemeenteNaam(zoekNaam.trim());
+
+      // Postcodes ophalen via NIS-code (Statbel/Bpost conversietabel).
+      // Als initialGemeente.nis meegegeven is (via dashboard-selectie),
+      // gebruiken we die direct; anders opzoeken via /geo/nis-lookup.
+      // Faalt de hele lookup, dan blijven postcodes leeg en tonen we een
+      // beknopte melding; onboarding kan alsnog verder.
+      (async () => {
+        try {
+          let nisCode = initialGemeente?.nis;
+          if (!nisCode) {
+            const nisResp = await getNisCode(zoekNaam.trim(), land);
+            nisCode = nisResp?.nis || nisResp?.nisCode || nisResp?.code;
+          }
+          if (!nisCode) {
+            setPostcodesInfo('NIS-code niet gevonden; postcodes moet je zelf invullen bij "Gemeente bewerken".');
+            return;
+          }
+          const pcResp = await getPostcodesVoorNis(String(nisCode));
+          const pcs = Array.isArray(pcResp?.postcodes) ? pcResp.postcodes : [];
+          if (pcs.length) {
+            setPostcodes(pcs);
+            setPostcodesInfo(`${pcs.length} postcode(s) automatisch gevonden.`);
+          } else {
+            setPostcodesInfo('Geen postcodes gevonden voor deze NIS-code; vul zelf in bij "Gemeente bewerken".');
+          }
+        } catch (e) {
+          setPostcodesInfo(`Postcodes automatisch ophalen mislukt (${e.message}); vul zelf in bij "Gemeente bewerken".`);
+        }
+      })();
 
       // Ruwe bbox-proxy, ALLEEN als allerlaatste terugvaloptie als de echte
       // opzoeking hieronder niets oplevert.
@@ -293,6 +362,19 @@ export default function GemeenteOnboarding({ onComplete, onClose }) {
     setLoading(false);
   }, [zoekNaam, land]);
 
+  // Auto-zoeken als de wizard geopend wordt met een voorgeselecteerde gemeente
+  // uit het dashboard. Vuurt exact één keer bij mount af, en alleen als er
+  // een naam is meegegeven. Voorkomt dubbele triggers via de useRef guard.
+  const autoZoekGedaan = useRef(false);
+  useEffect(() => {
+    if (!initialGemeente?.naam) return;
+    if (autoZoekGedaan.current) return;
+    autoZoekGedaan.current = true;
+    // Wachten op één render zodat state (zoekNaam) is toegepast, dan pas fetch.
+    const t = setTimeout(() => { zoekGemeente(); }, 0);
+    return () => clearTimeout(t);
+  }, [initialGemeente, zoekGemeente]);
+
   // ── Stap 2: wijktype aan/uit ──────────────────────────────────────
   const toggleWijktype = (idx, key) => {
     setWijken(ws => ws.map((w, i) => {
@@ -337,6 +419,7 @@ export default function GemeenteOnboarding({ onComplete, onClose }) {
       welvaartsindex:   parseFloat(welvaartsindex) || 106.9,
       privePctBerekend: (parseFloat(privePct) || 50) / 100,
       oppervlakteKm2:   gemeenteOppervlakteKm2,
+      postcodes:        Array.isArray(postcodes) ? postcodes : [],
       center:    geoData.center,
       zoom:      13,
       bbox:      geoData.bbox,
