@@ -228,8 +228,11 @@ export default function AppWithOnboarding() {
   //   gebruikt €9.000/paal (€4.500/socket) als bewuste marge voor prijsinflatie.
   // - DC en HPC: bedragen zijn per LAADPAAL (2 sockets per paal). Nog niet
   //   apart gevalideerd, moet nog getoetst tegen actuele markt.
-  // De berekening hieronder deelt delta.DC/HPC daarom door 2 (naar boven
-  //   afgerond: 3 sockets = 2 palen) om het aantal palen te krijgen.
+  // Methodiek DC/HPC: per wijk wordt het aantal palen bepaald met
+  //   Math.ceil(sockets/2). Een wijk met behoefte 0,5 / 1 / 1,5 sockets
+  //   krijgt dus 1 hele laadpaal (2 sockets), 2,5 / 3 / 3,5 sockets → 2
+  //   palen, enzovoort. Je kunt namelijk geen halve laadpaal plaatsen, en
+  //   palen worden per wijk gepland (niet gedeeld tussen wijken).
   const CAPEX_V2 = { AC: 4500, DC: 29000, HPC: 82000 };
 
   // ── Bereken wijken ─────────────────────────────────────────────────
@@ -294,8 +297,10 @@ export default function AppWithOnboarding() {
   // ook voor wijken die wel degelijk een fors tekort hebben. De AC-kost van
   // "gepland te installeren" wordt er hier ook echt vanaf getrokken, zodat
   // deze tegel meebeweegt met de Bijkomend-tegel hierboven.
-  const capexBijkomendRuw = wijkResults.reduce((s,r) =>
-    s + r.data.delta.AC*CAPEX_V2.AC + Math.ceil(r.data.delta.DC/2)*CAPEX_V2.DC + Math.ceil(r.data.delta.HPC/2)*CAPEX_V2.HPC, 0);
+  // Stadstotaal-CAPEX: som van de per-wijk CAPEX. Elke wijk heeft eigen
+  // laadpalen (0,5 socket-behoefte in een wijk = 1 hele laadpaal daar),
+  // dus we tellen per-wijk-ceils op, geen stadstotaal-ceil.
+  const capexBijkomendRuw = wijkResults.reduce((s,r) => s + r.data.capex, 0);
   const capexBijkomend = Math.max(0, capexBijkomendRuw - geplandAangerekend*CAPEX_V2.AC);
 
   const tijdreeks = YEARS.map(yr => {
