@@ -60,7 +60,6 @@ export default function GemeenteEditor({ gemeente, onSave, onClose }) {
     if (gemeente.postcodes && gemeente.postcodes.length > 0) {
       verversVanuitFluvius();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const [bevolkingLoading, setBevolkingLoading] = useState(false);
