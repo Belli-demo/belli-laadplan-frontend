@@ -724,15 +724,15 @@ export default function AppWithOnboarding() {
     side:   { width:300, background:C.panelBg, borderRight:`1px solid ${C.border}`, display:'flex', flexDirection:'column', overflow:'hidden', flexShrink:0 },
     scroll: { flex:1, overflowY:'auto' },
     sec:    { borderBottom:`1px solid ${C.border}` },
-    sHdr:   { fontSize:11, fontWeight:600, letterSpacing:'0.08em', textTransform:'uppercase', color:C.textDim, padding:'14px 16px 6px' },
-    sBody:  { padding:'6px 16px 14px' },
+    sHdr:   { fontSize:11, fontWeight:600, letterSpacing:'0.08em', textTransform:'uppercase', color:C.textDim, padding:'9px 16px 3px' },
+    sBody:  { padding:'4px 16px 10px' },
     // ── Nav items ──────────────────────────────────────────────────────
-    navItem:(a) => ({ display:'flex', alignItems:'center', gap:10, padding:'10px 16px', fontSize:14, color:a?C.teal:C.textMid, cursor:'pointer', borderLeft:`2px solid ${a?C.teal:'transparent'}`, background:a?'rgba(78,205,196,0.07)':'transparent', transition:'all 0.12s', userSelect:'none' }),
+    navItem:(a) => ({ display:'flex', alignItems:'center', gap:10, padding:'6px 16px', fontSize:13, color:a?C.teal:C.textMid, cursor:'pointer', borderLeft:`2px solid ${a?C.teal:'transparent'}`, background:a?'rgba(78,205,196,0.07)':'transparent', transition:'all 0.12s', userSelect:'none' }),
     // ── Parameters ─────────────────────────────────────────────────────
-    yTabs:  { display:'flex', gap:4, flexWrap:'wrap', marginTop:8 },
-    yTab:   (a) => ({ padding:'5px 10px', borderRadius:4, fontSize:13, fontWeight:500, cursor:'pointer', border:`1px solid ${a?C.tealDark:C.border}`, background:a?C.tealDark:'transparent', color:a?'#fff':C.textDim, transition:'all 0.12s' }),
-    sl:     { width:'100%', accentColor:C.teal, cursor:'pointer', margin:'4px 0' },
-    lbl:    { display:'flex', justifyContent:'space-between', fontSize:13, color:C.textMid, marginBottom:3 },
+    yTabs:  { display:'flex', gap:3, flexWrap:'wrap', marginTop:5 },
+    yTab:   (a) => ({ padding:'3px 8px', borderRadius:4, fontSize:12, fontWeight:500, cursor:'pointer', border:`1px solid ${a?C.tealDark:C.border}`, background:a?C.tealDark:'transparent', color:a?'#fff':C.textDim, transition:'all 0.12s' }),
+    sl:     { width:'100%', accentColor:C.teal, cursor:'pointer', margin:'2px 0' },
+    lbl:    { display:'flex', justifyContent:'space-between', fontSize:13, color:C.textMid, marginBottom:2 },
     lv:     { fontWeight:700, color:C.text },
     tog:    (on) => ({ width:36, height:20, borderRadius:10, background:on?C.tealDark:C.surface2, position:'relative', cursor:'pointer', border:`1px solid ${C.border}`, transition:'background 0.2s', flexShrink:0 }),
     tk:     (on) => ({ position:'absolute', top:2, left:on?18:2, width:14, height:14, borderRadius:'50%', background:'#fff', transition:'left 0.2s' }),
@@ -1001,8 +1001,8 @@ export default function AppWithOnboarding() {
           <div style={st.sec}>
             <div style={st.sHdr}>Parameters</div>
             <div style={st.sBody}>
-              <div style={{ marginBottom:12 }}>
-                <div style={{ fontSize:11, color:C.textDim, marginBottom:6, fontWeight:600, textTransform:'uppercase', letterSpacing:0.3 }}>Verdeling alle laadpunten</div>
+              <div style={{ marginBottom:8 }}>
+                <div style={{ fontSize:11, color:C.textDim, marginBottom:3, fontWeight:600, textTransform:'uppercase', letterSpacing:0.3 }}>Verdeling alle laadpunten</div>
                 <div style={st.lbl}><span>Privé %</span><span style={st.lv}>{((wijkResults[0]?.data.privePct||0)*100).toFixed(0)}%</span></div>
                 <div style={st.lbl}><span>Publiek + semi-publiek %</span><span style={st.lv}>{(100-(wijkResults[0]?.data.privePct||0)*100).toFixed(0)}%</span></div>
                 <input type="range" style={st.sl} min={0} max={100} step={1}
@@ -1013,7 +1013,7 @@ export default function AppWithOnboarding() {
                     onClick={()=>setPrivePctOverride(null)}>↺ reset naar berekend ({Math.round((gemeente?.privePctBerekend||0)*100)}%)</div>
                 )}
               </div>
-              <div style={{ marginBottom:12 }}>
+              <div style={{ marginBottom:8 }}>
                 <div style={st.lbl}><span>Buffer voor pieken en storingen</span><span style={st.lv}>{Math.round(redundantieMarge*100)}%</span></div>
                 <input type="range" style={st.sl} min={0} max={30} step={1} value={Math.round(redundantieMarge*100)} onChange={e=>setRedundantieMarge(+e.target.value/100)}/>
               </div>
