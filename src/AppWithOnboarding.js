@@ -1006,11 +1006,11 @@ export default function AppWithOnboarding() {
                 <div style={st.lbl}><span>Privé %</span><span style={st.lv}>{((wijkResults[0]?.data.privePct||0)*100).toFixed(0)}%</span></div>
                 <div style={st.lbl}><span>Publiek + semi-publiek %</span><span style={st.lv}>{(100-(wijkResults[0]?.data.privePct||0)*100).toFixed(0)}%</span></div>
                 <input type="range" style={st.sl} min={0} max={100} step={1}
-                  value={Math.round((privePctOverride ?? gemeente?.privePctBerekend ?? 0.5)*100)}
+                  value={Math.round((privePctOverride ?? v5PrivePctJ ?? gemeente?.privePctBerekend ?? 0.5)*100)}
                   onChange={e=>setPrivePctOverride(+e.target.value/100)}/>
                 {privePctOverride != null && (
                   <div style={{fontSize:12,color:C.textDim,cursor:'pointer',marginTop:4}}
-                    onClick={()=>setPrivePctOverride(null)}>↺ reset naar berekend ({Math.round((gemeente?.privePctBerekend||0)*100)}%)</div>
+                    onClick={()=>setPrivePctOverride(null)}>↺ reset naar berekend ({Math.round(((v5PrivePctJ ?? gemeente?.privePctBerekend) || 0)*100)}%)</div>
                 )}
               </div>
               <div style={{ marginBottom:8 }}>
