@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { updateGemeente, getFluviusPrive, verversBevolkingscijfers, getBevolking } from '../api';
-import { evAandeelGemeente } from '../gemeenteData';
+import { evAandeelGemeente, FLUVIUS_KAPPA } from '../gemeenteData';
 
 const C = {
   panelBg:'#122028', border:'#1e3a46', teal:'#9EC5CB',
@@ -180,17 +180,10 @@ export default function GemeenteEditor({ gemeente, onSave, onClose }) {
                 )}
               </div>
 
-              <div style={s.grid2}>
-                <div style={s.row}>
-                  <label style={s.label}>Welvaartsindex</label>
-                  <input style={s.input} type="number" step="0.1" value={welvaartsindex} onChange={e => setWelvaartsindex(e.target.value)} />
-                  <div style={s.hint}>Statbel. Vlaams gemiddelde: 106,9. Bepaalt de lokale correctie op het Vlaamse EV-aandeel.</div>
-                </div>
-                <div style={s.row}>
-                  <label style={s.label}>Privé % (berekend)</label>
-                  <input style={s.input} type="number" min="0" max="100" value={privePctBerekend} onChange={e => setPrivePctBerekend(e.target.value)} />
-                  <div style={s.hint}>Stadsmonitor "private buitenruimte", of eigen straatdataset indien beschikbaar.</div>
-                </div>
+              <div style={s.row}>
+                <label style={s.label}>Welvaartsindex</label>
+                <input style={s.input} type="number" step="0.1" value={welvaartsindex} onChange={e => setWelvaartsindex(e.target.value)} />
+                <div style={s.hint}>Statbel. Vlaams gemiddelde: 106,9. Bepaalt de lokale correctie op het Vlaamse EV-aandeel.</div>
               </div>
 
               <div style={s.row}>
@@ -205,25 +198,18 @@ export default function GemeenteEditor({ gemeente, onSave, onClose }) {
                 {fluviusError && <div style={s.error}>⚠ {fluviusError}</div>}
                 {fluviusResultaat && (
                   <div style={{ ...s.hint, marginTop:8, fontSize:11, lineHeight:1.7 }}>
-                    {fluviusResultaat.totaalPrivePunten.toLocaleString('nl-BE')} geregistreerde private laadpunten
-                    (Fluvius, {Object.keys(fluviusResultaat.perPostcode).length} van {fluviusResultaat.postcodes.length} postcodes bereikt)
-                    tegenover ~{Math.round(fluviusResultaat.huidigeEvs).toLocaleString('nl-BE')} geschatte EV's nu ({HUIDIG_JAAR}).
-                    {fluviusResultaat.voorgesteld != null && (
+                    <strong>{fluviusResultaat.totaalPrivePunten.toLocaleString('nl-BE')}</strong> aangemelde private laadpunten bij Fluvius
+                    ({Object.keys(fluviusResultaat.perPostcode).length} van {fluviusResultaat.postcodes.length} postcodes bereikt).
+                    Ongeveer 35% van de eigenaars meldt hun thuislader niet aan, dus tellen we die erbij op:{' '}
+                    <strong>~{Math.round(fluviusResultaat.totaalPrivePunten * FLUVIUS_KAPPA).toLocaleString('nl-BE')}</strong> werkelijke laadpunten.
+                    {fluviusResultaat.huidigeEvs > 0 && (
                       <>
-                        <br/>Daadwerkelijke installatiegraad nu: <strong style={{ color:C.teal }}>{Math.round(fluviusResultaat.voorgesteld*100)}%</strong>
-                        {' '}({HUIDIG_JAAR}, geen 2030-prognose)
-                        <button
-                          style={{ marginLeft:10, padding:'2px 10px', borderRadius:4, fontSize:11, fontWeight:700, cursor:'pointer', border:`1px solid ${C.tealDark}`, background:C.tealDark, color:'#fff' }}
-                          onClick={() => setPrivePctBerekend(Math.round(fluviusResultaat.voorgesteld*100))}
-                        >
-                          ↑ Overnemen als privé%
-                        </button>
-                        <div style={{ color:C.gold, marginTop:4 }}>
-                          Let op: dit meet iets anders dan het privé%-veld hierboven (garage/oprit-mogelijkheid volgens de
-                          Stadsmonitor) en is bovendien een momentopname van {HUIDIG_JAAR}, geen projectie voor 2030. Niet
-                          zonder nadenken overnemen: beoordeel eerst of, en hoe, dit percentage naar 2030 zou moeten
-                          bewegen, voordat je het privé%-veld hierboven handmatig aanpast.
-                        </div>
+                        <br/>
+                        <strong>% van de EV-eigenaren met een eigen laadpunt</strong>:{' '}
+                        <strong style={{ color:C.teal }}>
+                          {Math.round(Math.min(1, (fluviusResultaat.totaalPrivePunten * FLUVIUS_KAPPA) / fluviusResultaat.huidigeEvs) * 100)}%
+                        </strong>
+                        {' '}(peildatum {HUIDIG_JAAR})
                       </>
                     )}
                     {fluviusResultaat.mislukt?.length > 0 && (
