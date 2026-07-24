@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { updateGemeente, getFluviusPrive, verversBevolkingscijfers, getBevolking } from '../api';
 import { evAandeelGemeente, FLUVIUS_KAPPA } from '../gemeenteData';
 
@@ -51,6 +51,17 @@ export default function GemeenteEditor({ gemeente, onSave, onClose }) {
     }
     setFluviusLoading(false);
   };
+
+  // Auto-load Fluvius bij openen van editor als postcodes bekend zijn.
+  // Zo staat het "% van de EV-eigenaren met een eigen laadpunt" veld direct
+  // gevuld en hoeft de gebruiker de Fluvius-knop alleen te gebruiken om te
+  // verversen. Vuurt exact één keer bij mount af.
+  useEffect(() => {
+    if (gemeente.postcodes && gemeente.postcodes.length > 0) {
+      verversVanuitFluvius();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [bevolkingLoading, setBevolkingLoading] = useState(false);
   const [bevolkingResultaat, setBevolkingResultaat] = useState(null);
@@ -192,26 +203,38 @@ export default function GemeenteEditor({ gemeente, onSave, onClose }) {
               </div>
 
               <div style={s.row}>
-                <button style={s.btn(false)} onClick={verversVanuitFluvius} disabled={fluviusLoading || !postcodes.trim()}>
-                  {fluviusLoading ? 'Bezig…' : '⟳ Haal actuele private laadpunten op (Fluvius)'}
-                </button>
+                <div style={{ display:'flex', gap:12, alignItems:'stretch' }}>
+                  <button
+                    style={{ ...s.btn(false), flex:'1 1 auto' }}
+                    onClick={verversVanuitFluvius}
+                    disabled={fluviusLoading || !postcodes.trim()}
+                  >
+                    {fluviusLoading ? 'Bezig…' : '⟳ Haal actuele private laadpunten op (Fluvius)'}
+                  </button>
+                  <div style={{ display:'flex', flexDirection:'column', minWidth:220 }}>
+                    <label style={{ ...s.label, marginBottom:2 }}>% EV-eigenaren met eigen laadpunt</label>
+                    <div style={{
+                      ...s.input,
+                      background:'#0d1c22',
+                      color: fluviusResultaat && fluviusResultaat.huidigeEvs > 0 ? C.teal : C.textDim,
+                      fontWeight:700,
+                      display:'flex',
+                      alignItems:'center',
+                      justifyContent:'center',
+                    }}>
+                      {fluviusResultaat && fluviusResultaat.huidigeEvs > 0
+                        ? `${Math.round(Math.min(1, (fluviusResultaat.totaalPrivePunten * FLUVIUS_KAPPA) / fluviusResultaat.huidigeEvs) * 100)}%`
+                        : (fluviusLoading ? '…' : '—')}
+                    </div>
+                  </div>
+                </div>
                 {fluviusError && <div style={s.error}>⚠ {fluviusError}</div>}
                 {fluviusResultaat && (
                   <div style={{ ...s.hint, marginTop:8, fontSize:11, lineHeight:1.7 }}>
                     <strong>{fluviusResultaat.totaalPrivePunten.toLocaleString('nl-BE')}</strong> aangemelde private laadpunten bij Fluvius
                     ({Object.keys(fluviusResultaat.perPostcode).length} van {fluviusResultaat.postcodes.length} postcodes bereikt).
                     Ongeveer 35% van de eigenaars meldt hun thuislader niet aan, dus tellen we die erbij op:{' '}
-                    <strong>~{Math.round(fluviusResultaat.totaalPrivePunten * FLUVIUS_KAPPA).toLocaleString('nl-BE')}</strong> werkelijke laadpunten.
-                    {fluviusResultaat.huidigeEvs > 0 && (
-                      <>
-                        <br/>
-                        <strong>% van de EV-eigenaren met een eigen laadpunt</strong>:{' '}
-                        <strong style={{ color:C.teal }}>
-                          {Math.round(Math.min(1, (fluviusResultaat.totaalPrivePunten * FLUVIUS_KAPPA) / fluviusResultaat.huidigeEvs) * 100)}%
-                        </strong>
-                        {' '}(peildatum {HUIDIG_JAAR})
-                      </>
-                    )}
+                    <strong>~{Math.round(fluviusResultaat.totaalPrivePunten * FLUVIUS_KAPPA).toLocaleString('nl-BE')}</strong> werkelijke laadpunten (peildatum {HUIDIG_JAAR}).
                     {fluviusResultaat.mislukt?.length > 0 && (
                       <div style={{ color:C.warn }}>Niet bereikbaar: {fluviusResultaat.mislukt.join(', ')}</div>
                     )}
