@@ -847,8 +847,11 @@ export default function AppWithOnboarding() {
       <div style={{...st.app, display: showDashboard ? 'none' : 'flex'}}>
       <style>{`
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-        ::-webkit-scrollbar{width:4px}
-        ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:2px}
+        *{scrollbar-width:auto;scrollbar-color:rgba(255,255,255,0.35) transparent}
+        ::-webkit-scrollbar{width:12px;height:12px}
+        ::-webkit-scrollbar-track{background:transparent}
+        ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.35);border-radius:6px;border:2px solid transparent;background-clip:padding-box}
+        ::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.55);background-clip:padding-box;border:2px solid transparent}
         .belli-tooltip { background: white; border: 1px solid #ddd; border-radius: 8px; padding: 8px 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
         .belli-tooltip::before { display: none; }
         .leaflet-tooltip.belli-tooltip { white-space: normal; }
@@ -1052,28 +1055,28 @@ export default function AppWithOnboarding() {
             </div>
           </div>
 
-          {/* Totalen */}
-          <div style={st.sec}>
-            <div style={st.sHdr}>Totaal {gemeente?.naam}, {year}</div>
-            <div style={st.sBody}>
-              <div style={st.stG}>
-                {[['Laadpunten nodig',fmtN(totLP),C.teal,'publiek domein'],
-                  ['Bijkomend',fmtN(bijkomend),C.gold,'t.o.v. gepland en huidig'],
-                  ['MWh/jaar',fmtN(totMwh),C.teal,'publieke vraag'],
-                  ['CAPEX',fmtEur(capexBijkomend),C.warn,'indicatief, nog te bouwen']
-                ].map(([l,v,c,sub])=>(
-                  <div key={l} style={st.stC}>
-                    <div style={st.sL}>{l}</div>
-                    <div style={st.sV(c)}>{v}</div>
-                    <div style={st.sS}>{sub}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
           {dbStatus==='offline' && <div style={{fontSize:12,color:C.gold,padding:'6px 16px'}}>Lokale modus</div>}
 
+        </div>
+
+        {/* Kerncijfers onderaan de sidebar, altijd zichtbaar zonder scrollen */}
+        <div style={{...st.sec, borderBottom:'none', borderTop:`1px solid ${C.border}`, flexShrink:0, background:C.panelBg}}>
+          <div style={st.sHdr}>Totaal {gemeente?.naam}, {year}</div>
+          <div style={st.sBody}>
+            <div style={st.stG}>
+              {[['Laadpunten nodig',fmtN(totLP),C.teal,'publiek domein'],
+                ['Bijkomend',fmtN(bijkomend),C.gold,'t.o.v. gepland en huidig'],
+                ['MWh/jaar',fmtN(totMwh),C.teal,'publieke vraag'],
+                ['CAPEX',fmtEur(capexBijkomend),C.warn,'indicatief, nog te bouwen']
+              ].map(([l,v,c,sub])=>(
+                <div key={l} style={st.stC}>
+                  <div style={st.sL}>{l}</div>
+                  <div style={st.sV(c)}>{v}</div>
+                  <div style={st.sS}>{sub}</div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
