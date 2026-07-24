@@ -223,13 +223,13 @@ export default function AppWithOnboarding() {
     slimLaden: trends.slim,
   };
 
-  // CAPEX per laadtype (per laadpunt/socket, niet per paal):
-  // - AC: gevalideerd door de gebruiker obv actuele marktprijzen (hardware,
-  //   netaansluiting, installatie), reële kost ca. €8.000/paal (2 laadpunten),
-  //   hier op €9.000/paal (€4.500/laadpunt) gehouden als bewuste marge voor
-  //   prijsinflatie de komende jaren.
-  // - DC en HPC: nog NIET apart gevalideerd, herverdeling van oudere,
-  //   ongecontroleerde prijsstelling (zie Leeswijzer), moet nog getoetst.
+  // CAPEX per laadtype. Let op de eenheid, deze verschilt:
+  // - AC: €4.500 per SOCKET. Reële kost ca. €8.000/paal (2 sockets), model
+  //   gebruikt €9.000/paal (€4.500/socket) als bewuste marge voor prijsinflatie.
+  // - DC en HPC: bedragen zijn per LAADPAAL (2 sockets per paal). Nog niet
+  //   apart gevalideerd, moet nog getoetst tegen actuele markt.
+  // De berekening hieronder deelt delta.DC/HPC daarom door 2 (naar boven
+  //   afgerond: 3 sockets = 2 palen) om het aantal palen te krijgen.
   const CAPEX_V2 = { AC: 4500, DC: 29000, HPC: 82000 };
 
   // ── Bereken wijken ─────────────────────────────────────────────────
@@ -241,7 +241,7 @@ export default function AppWithOnboarding() {
       DC:  Math.max(0, data.totDC  - bestaand.DC),
       HPC: Math.max(0, data.totHPC - bestaand.HPC),
     };
-    const capex = delta.AC*CAPEX_V2.AC + delta.DC*CAPEX_V2.DC + delta.HPC*CAPEX_V2.HPC;
+    const capex = delta.AC*CAPEX_V2.AC + Math.ceil(delta.DC/2)*CAPEX_V2.DC + Math.ceil(delta.HPC/2)*CAPEX_V2.HPC;
     return { wijk:w, data:{ ...data, bestaand, delta, capex,
       deltaTotaal: delta.AC + delta.DC + delta.HPC } };
   });
@@ -295,7 +295,7 @@ export default function AppWithOnboarding() {
   // "gepland te installeren" wordt er hier ook echt vanaf getrokken, zodat
   // deze tegel meebeweegt met de Bijkomend-tegel hierboven.
   const capexBijkomendRuw = wijkResults.reduce((s,r) =>
-    s + r.data.delta.AC*CAPEX_V2.AC + r.data.delta.DC*CAPEX_V2.DC + r.data.delta.HPC*CAPEX_V2.HPC, 0);
+    s + r.data.delta.AC*CAPEX_V2.AC + Math.ceil(r.data.delta.DC/2)*CAPEX_V2.DC + Math.ceil(r.data.delta.HPC/2)*CAPEX_V2.HPC, 0);
   const capexBijkomend = Math.max(0, capexBijkomendRuw - geplandAangerekend*CAPEX_V2.AC);
 
   const tijdreeks = YEARS.map(yr => {
@@ -316,7 +316,7 @@ export default function AppWithOnboarding() {
         DC:  Math.max(0, d.totDC  - bestaand.DC),
         HPC: Math.max(0, d.totHPC - bestaand.HPC),
       };
-      const capex = delta.AC*CAPEX_V2.AC + delta.DC*CAPEX_V2.DC + delta.HPC*CAPEX_V2.HPC;
+      const capex = delta.AC*CAPEX_V2.AC + Math.ceil(delta.DC/2)*CAPEX_V2.DC + Math.ceil(delta.HPC/2)*CAPEX_V2.HPC;
       return { ...d, bestaand, delta, deltaTotaal: delta.AC+delta.DC+delta.HPC, capex };
     });
     const totLPJaar      = res.reduce((s,r)=>s+r.totLP,0);
@@ -816,7 +816,7 @@ export default function AppWithOnboarding() {
         DC:  Math.max(0, d.totDC  - bestaand.DC),
         HPC: Math.max(0, d.totHPC - bestaand.HPC),
       };
-      const capex = delta.AC * 4500 + delta.DC * 29000 + delta.HPC * 82000;
+      const capex = delta.AC * CAPEX_V2.AC + Math.ceil(delta.DC/2) * CAPEX_V2.DC + Math.ceil(delta.HPC/2) * CAPEX_V2.HPC;
       return {
         jaar: yr,
         totMwh: Math.round(d.totMwh),
@@ -974,20 +974,6 @@ export default function AppWithOnboarding() {
               </svg>
               Stadsdelen
             </div>
-            <div style={st.navItem(false)} onClick={() => setShowEditor(true)}>
-              <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M11 2l3 3-8 8H3v-3l8-8z"/>
-              </svg>
-              Gemeente bewerken
-            </div>
-            {!STANDAARD_IDS.includes(gemId) && (
-              <div style={{...st.navItem(false), color:C.warn}} onClick={() => setShowDelete(true)}>
-                <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <polyline points="3 6 13 6"/><path d="M5 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><rect x="3" y="6" width="10" height="9" rx="1"/>
-                </svg>
-                Verwijderen
-              </div>
-            )}
           </div>
 
           {/* EV-aandeel & jaar */}
@@ -1067,7 +1053,7 @@ export default function AppWithOnboarding() {
               {[['Laadpunten nodig',fmtN(totLP),C.teal,'publiek domein'],
                 ['Bijkomend',fmtN(bijkomend),C.gold,'t.o.v. gepland en huidig'],
                 ['MWh/jaar',fmtN(totMwh),C.teal,'publieke vraag'],
-                ['CAPEX',fmtEur(capexBijkomend),C.warn,'indicatief, nog te bouwen']
+                ['CAPEX',fmtEur(capexBijkomend),C.warn,`Bijkomende CAPEX tot ${year}`]
               ].map(([l,v,c,sub])=>(
                 <div key={l} style={st.stC}>
                   <div style={st.sL}>{l}</div>
@@ -1228,7 +1214,25 @@ export default function AppWithOnboarding() {
       {/* KAART AREA */}
       <div style={{...st.mArea, display: showWijken ? 'none' : 'flex'}}>
         <div style={{height:46,background:C.panelBg,borderBottom:`1px solid ${C.border}`,display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 16px',flexShrink:0}}>
-          <div style={{fontSize:14,fontWeight:700,color:C.text}}>{gemeente?.naam} · {year}</div>
+          <div style={{display:'flex',alignItems:'center',gap:14}}>
+            <div style={{fontSize:14,fontWeight:700,color:C.text}}>{gemeente?.naam} · {year}</div>
+            <div style={{display:'flex',gap:6}}>
+              <button onClick={() => setShowEditor(true)} style={{padding:'5px 10px',borderRadius:5,fontSize:12,fontWeight:600,cursor:'pointer',border:`1px solid ${C.border}`,background:'transparent',color:C.text,display:'flex',alignItems:'center',gap:6}}>
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M11 2l3 3-8 8H3v-3l8-8z"/>
+                </svg>
+                Bewerken
+              </button>
+              {!STANDAARD_IDS.includes(gemId) && (
+                <button onClick={() => setShowDelete(true)} style={{padding:'5px 10px',borderRadius:5,fontSize:12,fontWeight:600,cursor:'pointer',border:`1px solid ${C.border}`,background:'transparent',color:C.warn,display:'flex',alignItems:'center',gap:6}}>
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <polyline points="3 6 13 6"/><path d="M5 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><rect x="3" y="6" width="10" height="9" rx="1"/>
+                  </svg>
+                  Verwijderen
+                </button>
+              )}
+            </div>
+          </div>
           <div style={{fontSize:12,color:C.textDim,display:'flex',alignItems:'center',gap:12}}>
             <span>
               <span style={{width:7,height:7,borderRadius:'50%',background:'#4CAF50',display:'inline-block',marginRight:5,animation:'pulse 2s infinite'}}/>
