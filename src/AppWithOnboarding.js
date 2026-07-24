@@ -722,7 +722,7 @@ export default function AppWithOnboarding() {
     dbDot:  (s) => ({ width:6, height:6, borderRadius:'50%', background: s==='online'?C.green:s==='offline'?C.red:C.gold }),
     // ── Sidebar ────────────────────────────────────────────────────────
     side:   { width:300, background:C.panelBg, borderRight:`1px solid ${C.border}`, display:'flex', flexDirection:'column', overflow:'hidden', flexShrink:0 },
-    scroll: { flex:1, overflowY:'auto' },
+    scroll: { flex:1, overflowY:'auto', display:'flex', flexDirection:'column', justifyContent:'space-between' },
     sec:    { borderBottom:`1px solid ${C.border}` },
     sHdr:   { fontSize:11, fontWeight:600, letterSpacing:'0.08em', textTransform:'uppercase', color:C.textDim, padding:'9px 16px 3px' },
     sBody:  { padding:'4px 16px 10px' },
