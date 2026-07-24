@@ -1020,7 +1020,7 @@ export default function AppWithOnboarding() {
                 )}
               </div>
               <div style={{ marginBottom:12 }}>
-                <div style={st.lbl}><span>Redundantiemarge</span><span style={st.lv}>{Math.round(redundantieMarge*100)}%</span></div>
+                <div style={st.lbl}><span>Buffer voor pieken en storingen</span><span style={st.lv}>{Math.round(redundantieMarge*100)}%</span></div>
                 <input type="range" style={st.sl} min={0} max={30} step={1} value={Math.round(redundantieMarge*100)} onChange={e=>setRedundantieMarge(+e.target.value/100)}/>
               </div>
               <div>
@@ -1304,7 +1304,7 @@ export default function AppWithOnboarding() {
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)"/>
                 <XAxis dataKey="jaar" tick={{fill:C.textDim,fontSize:10}}/>
                 <YAxis tick={{fill:C.textDim,fontSize:10}}/>
-                <Tooltip contentStyle={{background:C.panelBg,border:`1px solid ${C.border}`,fontSize:11}}/>
+                <Tooltip contentStyle={{background:C.panelBg,border:`1px solid ${C.border}`,fontSize:11}} formatter={(v) => typeof v === "number" ? Math.ceil(v).toLocaleString("nl-BE") : v}/>
                 <Line dataKey="MWh" stroke={C.green} strokeWidth={2} dot={false}/>
               </LineChart>
             ):chartTab==='capex'?(
@@ -1312,7 +1312,7 @@ export default function AppWithOnboarding() {
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)"/>
                 <XAxis dataKey="jaar" tick={{fill:C.textDim,fontSize:10}}/>
                 <YAxis tick={{fill:C.textDim,fontSize:10}}/>
-                <Tooltip contentStyle={{background:C.panelBg,border:`1px solid ${C.border}`,fontSize:11}}/>
+                <Tooltip contentStyle={{background:C.panelBg,border:`1px solid ${C.border}`,fontSize:11}} formatter={(v) => typeof v === "number" ? Math.ceil(v).toLocaleString("nl-BE") : v}/>
                 <Bar dataKey="CAPEX €K" fill={C.gold} radius={[3,3,0,0]}/>
               </BarChart>
             ):(
@@ -1320,7 +1320,7 @@ export default function AppWithOnboarding() {
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)"/>
                 <XAxis dataKey="jaar" tick={{fill:C.textDim,fontSize:10}}/>
                 <YAxis tick={{fill:C.textDim,fontSize:10}}/>
-                <Tooltip contentStyle={{background:C.panelBg,border:`1px solid ${C.border}`,fontSize:11}}/>
+                <Tooltip contentStyle={{background:C.panelBg,border:`1px solid ${C.border}`,fontSize:11}} formatter={(v) => typeof v === "number" ? Math.ceil(v).toLocaleString("nl-BE") : v}/>
                 <Line dataKey="Laadpunten nodig" stroke={C.teal} strokeWidth={2} dot={false}/>
                 <Line dataKey="Bijkomend" stroke={C.warn} strokeWidth={2} dot={false} strokeDasharray="4 2"/>
               </LineChart>
